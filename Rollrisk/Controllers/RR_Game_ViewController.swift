@@ -38,6 +38,15 @@ public class RR_Game_ViewController : RR_ViewController {
 	var currentRollNumber:Int = 0
 	private var isAIPlaying:Bool = false // Indique si l'IA est en train de jouer
 	private var aiTurnId:Int = 0 // Identifiant unique du tour IA pour annuler les appels asynchrones
+	
+	// MARK: - Dernier tour
+	
+	/// Indique si c'est le dernier tour (un joueur a atteint l'objectif)
+	private var isLastRound:Bool = false
+	/// Index du joueur qui a déclenché le dernier tour
+	private var lastRoundTriggerPlayerIndex:Int? = nil
+	/// Ensemble des joueurs qui ont déjà joué leur dernier tour
+	private var playersWhoPlayedLastRound:Set<Int> = []
 	lazy var stackView:UIStackView = {
 		
 		$0.alpha = 0.0
@@ -267,14 +276,53 @@ public class RR_Game_ViewController : RR_ViewController {
 					applyEqualityKnockback(for: currentPlayer, newScore: currentPlayer.score)
 				}
 				
-				// Vérifier victoire
+				// Vérifier si l'IA a atteint l'objectif
 				if currentPlayer.score >= rules.targetScore {
 					updatePlayersDisplay()
-					handleVictory(for: currentPlayer)
-					return
+					
+					// Gérer le dernier tour
+					if !isLastRound {
+						isLastRound = true
+						lastRoundTriggerPlayerIndex = currentPlayerIndex
+						playersWhoPlayedLastRound.insert(currentPlayerIndex)
+						
+						// Afficher le tutoriel "Dernier tour"
+						showLastRoundTutorial {
+							self.proceedAfterSkipAI()
+						}
+						return
+					} else {
+						playersWhoPlayedLastRound.insert(currentPlayerIndex)
+						checkEndOfLastRound()
+						return
+					}
 				}
 			}
 		}
+		
+		// Si on est dans le dernier tour
+		if isLastRound {
+			playersWhoPlayedLastRound.insert(currentPlayerIndex)
+			
+			// Réinitialiser l'état du tour
+			hasRolledThisTurn = false
+			scoringDiceIndices.removeAll()
+			currentRollNumber = 0
+			accumulatedScore = 0
+			turnScore = 0
+			turnScoreLabel.text = "0"
+			resetDiceToContainer()
+			updatePlayersDisplay()
+			
+			checkEndOfLastRound()
+			return
+		}
+		
+		proceedAfterSkipAI()
+	}
+	
+	/// Continue après avoir passé le tour de l'IA
+	private func proceedAfterSkipAI() {
 		
 		// Réinitialiser l'état du tour
 		hasRolledThisTurn = false
@@ -700,9 +748,37 @@ public class RR_Game_ViewController : RR_ViewController {
 		// Mettre à jour l'affichage
 		updatePlayersDisplay()
 		
-		// Vérifier si le joueur a gagné
+		// Vérifier si le joueur a atteint l'objectif
 		if newScore >= rules.targetScore {
-			handleVictory(for: currentPlayer)
+			
+			// Si c'est le premier à atteindre l'objectif, déclencher le dernier tour
+			if !isLastRound {
+				isLastRound = true
+				lastRoundTriggerPlayerIndex = currentPlayerIndex
+				playersWhoPlayedLastRound.insert(currentPlayerIndex)
+				
+				// Afficher le tutoriel "Dernier tour"
+				showLastRoundTutorial {
+					// Réinitialiser le flag IA si c'était son tour
+					if !self.isCurrentPlayerHuman() {
+						self.isAIPlaying = false
+					}
+					// Passer au joueur suivant pour leur donner une chance
+					self.nextPlayer()
+				}
+				return
+			} else {
+				// On est déjà dans le dernier tour
+				playersWhoPlayedLastRound.insert(currentPlayerIndex)
+				checkEndOfLastRound()
+				return
+			}
+		}
+		
+		// Si on est dans le dernier tour mais le joueur n'a pas atteint l'objectif
+		if isLastRound {
+			playersWhoPlayedLastRound.insert(currentPlayerIndex)
+			checkEndOfLastRound()
 			return
 		}
 		
@@ -752,6 +828,11 @@ public class RR_Game_ViewController : RR_ViewController {
 		
 		isAIPlaying = false
 		
+		// Réinitialiser l'état du dernier tour
+		isLastRound = false
+		lastRoundTriggerPlayerIndex = nil
+		playersWhoPlayedLastRound.removeAll()
+		
 		// En mode multijoueur local, tout le monde est humain - pas de stats
 		if isLocalMultiplayer {
 			RR_Audio.shared.playSound(.Success)
@@ -792,6 +873,52 @@ public class RR_Game_ViewController : RR_ViewController {
 		}
 		alert.present {
 			RR_Confettis.start()
+		}
+	}
+	
+	/// Affiche le tutoriel "Dernier tour !" quand un joueur atteint l'objectif
+	private func showLastRoundTutorial(completion: @escaping () -> Void) {
+		
+		RR_Audio.shared.playSound(.Success)
+		RR_Feedback.shared.make(.On)
+		
+		let viewController:RR_Tutorial_ViewController = .init()
+		viewController.items = [
+			RR_Tutorial_ViewController.Item(
+				title: String(key: "game.lastRound.title"),
+				subtitle: String(key: "game.lastRound.subtitle"),
+				timeInterval: 2.0
+			)
+		]
+		viewController.completion = completion
+		viewController.present()
+	}
+	
+	/// Vérifie si tous les joueurs ont joué leur dernier tour et détermine le gagnant
+	private func checkEndOfLastRound() {
+		
+		// Vérifier si tous les joueurs ont joué leur dernier tour
+		let allPlayersPlayed = players.indices.allSatisfy { playersWhoPlayedLastRound.contains($0) }
+		
+		if allPlayersPlayed {
+			// Déterminer le gagnant (score le plus élevé)
+			// En cas d'égalité, le premier à avoir atteint le score gagne (celui qui a déclenché le dernier tour)
+			guard let winner = players.enumerated().max(by: { player1, player2 in
+				if player1.element.score == player2.element.score {
+					// En cas d'égalité, celui qui a déclenché le dernier tour gagne
+					return player1.offset != lastRoundTriggerPlayerIndex
+				}
+				return player1.element.score < player2.element.score
+			})?.element else { return }
+			
+			handleVictory(for: winner)
+		} else {
+			// Réinitialiser le flag IA si c'était son tour
+			if !isCurrentPlayerHuman() {
+				isAIPlaying = false
+			}
+			// Passer au joueur suivant
+			nextPlayer()
 		}
 	}
 	
@@ -858,6 +985,13 @@ public class RR_Game_ViewController : RR_ViewController {
 		
 		updateValidateButton()
 		updateRollHint()
+		
+		// Si on est dans le dernier tour, marquer que ce joueur a joué (même s'il a fait un ballot)
+		if isLastRound {
+			playersWhoPlayedLastRound.insert(currentPlayerIndex)
+			checkEndOfLastRound()
+			return
+		}
 		
 		// Passer au joueur suivant
 		nextPlayer()
@@ -1506,6 +1640,11 @@ public class RR_Game_ViewController : RR_ViewController {
 		currentPlayerIndex = 0
 		turnScore = 0
 		turnScoreLabel.text = "0"
+		
+		// Réinitialiser l'état du dernier tour
+		isLastRound = false
+		lastRoundTriggerPlayerIndex = nil
+		playersWhoPlayedLastRound.removeAll()
 		
 		UIView.animation {
 			

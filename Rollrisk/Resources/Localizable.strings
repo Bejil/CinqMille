@@ -168,6 +168,8 @@
 "game.close.alert.button" = "Quitter";
 "game.equality.tutorial.title" = "Égalité";
 "game.equality.tutorial.subtitle.currentPlayer" = "Vous revenez à votre précédent score";
+"game.lastRound.title" = "Dernier tour !";
+"game.lastRound.subtitle" = "Un joueur a atteint l'objectif !\nLes autres ont un dernier tour pour tenter de l'égaler.";
 
 //MARK: - Game Tutorial
 "game.tutorial.players.title" = "Les joueurs";
