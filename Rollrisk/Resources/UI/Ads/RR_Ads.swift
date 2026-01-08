@@ -25,7 +25,7 @@ public class RR_Ads : NSObject {
 	
 	public var shouldDisplayAd:Bool {
 		
-		return (UserDefaults.get(.shouldDisplayAds) as? Bool ?? true) && ConsentInformation.shared.consentStatus == .obtained && !UIApplication.isDebug
+		return (UserDefaults.get(.shouldDisplayAds) as? Bool ?? true) && ConsentInformation.shared.consentStatus == .obtained// && !UIApplication.isDebug
 	}
 	
 	public func start() {

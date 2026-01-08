@@ -146,11 +146,6 @@ public struct Ads {
 	public struct Banner {
 		
 		static let Menu:String = "ca-app-pub-9540216894729209/2936001476"
-		
-		public struct Game {
-			
-			static let GameSolo:String = "ca-app-pub-9540216894729209/5450484173"
-			static let GameMulti:String = "ca-app-pub-9540216894729209/7706463498"
-		}
+		static let Game:String = "ca-app-pub-9540216894729209/8747565504"
 	}
 }

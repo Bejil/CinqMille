@@ -10,6 +10,7 @@ import SnapKit
 
 public class RR_Menu_ViewController : RR_ViewController {
 	
+	private lazy var bannerView = RR_Ads.shared.presentBanner(Ads.Banner.Menu, self)
 	private lazy var stackView:UIStackView = {
 		
 		$0.axis = .vertical
@@ -85,6 +86,10 @@ public class RR_Menu_ViewController : RR_ViewController {
 		settingsButton.type = .tertiary
 		$0.addArrangedSubview(settingsButton)
 		
+		$0.setCustomSpacing(1.5*$0.spacing, after: settingsButton)
+		
+		$0.addArrangedSubview(bannerView)
+		
 		return $0
 		
 	}(UIStackView())
@@ -123,5 +128,12 @@ public class RR_Menu_ViewController : RR_ViewController {
 		}
 		
 		stackView.animate()
+	}
+	
+	public override func viewWillAppear(_ animated: Bool) {
+		
+		super.viewWillAppear(animated)
+		
+		bannerView.refresh()
 	}
 }

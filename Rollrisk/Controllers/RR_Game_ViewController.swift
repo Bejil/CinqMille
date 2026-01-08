@@ -10,6 +10,8 @@ import SnapKit
 
 public class RR_Game_ViewController : RR_ViewController {
 	
+	private lazy var bannerView = RR_Ads.shared.presentBanner(Ads.Banner.Game, self)
+	
 	// MARK: - Mode de jeu
 	
 	/// Si true, tous les joueurs sont humains (pas d'IA)
@@ -41,16 +43,17 @@ public class RR_Game_ViewController : RR_ViewController {
 		$0.alpha = 0.0
 		$0.axis = .vertical
 		$0.spacing = UI.Margins
-		
-		let containerStackView:UIStackView = .init(arrangedSubviews: [playersStackView, dicesStackView])
-		containerStackView.axis = .vertical
-		containerStackView.spacing = UI.Margins
-		containerStackView.isLayoutMarginsRelativeArrangement = true
-		containerStackView.layoutMargins = .init(UI.Margins)
 		$0.addArrangedSubview(containerStackView)
-		
 		$0.addArrangedSubview(turnScoreStackView)
+		return $0
 		
+	}(UIStackView())
+	private lazy var containerStackView:UIStackView = {
+		
+		$0.axis = .vertical
+		$0.spacing = UI.Margins
+		$0.isLayoutMarginsRelativeArrangement = true
+		$0.layoutMargins = .init(UI.Margins)
 		return $0
 		
 	}(UIStackView(arrangedSubviews: [playersStackView, dicesStackView]))
@@ -160,19 +163,24 @@ public class RR_Game_ViewController : RR_ViewController {
 		$0.layer.addSublayer(buttonsShapeLayer)
 		$0.isLayoutMarginsRelativeArrangement = true
 		$0.layoutMargins = .init(top: UI.Margins, left: UI.Margins, bottom: view.safeAreaInsets.bottom + UI.Margins, right: UI.Margins)
+		$0.addArrangedSubview(scoreLabelsStackView)
+		$0.addArrangedSubview(validateButton)
+		return $0
+		
+	}(UIStackView())
+	private lazy var scoreLabelsStackView:UIStackView = {
+		
+		$0.axis = .vertical
+		$0.spacing = UI.Margins / 4
+		$0.alignment = .center
 		
 		let turnScoreTitleLabel:RR_Label = .init(String(key: "game.turn.score"))
 		turnScoreTitleLabel.font = Fonts.Content.Text.Regular
 		turnScoreTitleLabel.textColor = Colors.Background.View
 		turnScoreTitleLabel.textAlignment = .center
+		$0.addArrangedSubview(turnScoreTitleLabel)
 		
-		let scoreLabelsStackView:UIStackView = .init(arrangedSubviews: [turnScoreTitleLabel, turnScoreLabel])
-		scoreLabelsStackView.axis = .vertical
-		scoreLabelsStackView.spacing = UI.Margins / 4
-		scoreLabelsStackView.alignment = .center
-		$0.addArrangedSubview(scoreLabelsStackView)
-		
-		$0.addArrangedSubview(validateButton)
+		$0.addArrangedSubview(turnScoreLabel)
 		
 		return $0
 		
@@ -427,7 +435,18 @@ public class RR_Game_ViewController : RR_ViewController {
 		
 		RR_Player.current.resetGameState()
 		
-		super.dismiss(completion)
+		super.dismiss {
+			
+			completion?()
+			
+			RR_Alert_ViewController.presentLoading({ alertController in
+				
+				RR_Ads.shared.presentInterstitial(Ads.FullScreen.Game.End, nil, {
+				
+					alertController?.close()
+				})
+			})
+		}
 	}
 	
 	private func handleDiceTap() {
@@ -871,6 +890,8 @@ public class RR_Game_ViewController : RR_ViewController {
 			// C'est le tour du joueur humain - s'assurer que l'IA est arrêtée
 			isAIPlaying = false
 		}
+		
+		bannerView.refresh()
 	}
 	
 	// MARK: - AI
@@ -1419,26 +1440,35 @@ public class RR_Game_ViewController : RR_ViewController {
 		
 		super.viewWillAppear(animated)
 		
-		let alertViewController:RR_Alert_ViewController = .init()
-		alertViewController.backgroundView.isUserInteractionEnabled = false
-		alertViewController.title = String(key: "game.opponents.title")
-		alertViewController.add(String(key: "game.opponents.content"))
-		(1...3).forEach { index in
+		RR_Alert_ViewController.presentLoading({ [weak self] alertController in
 			
-			alertViewController.addButton(title: String(key: "game.opponents.button.\(index)")) { [weak self] _ in
+			RR_Ads.shared.presentInterstitial(Ads.FullScreen.Game.Start, nil, { [weak self] in
 				
-				alertViewController.close { [weak self] in
+				alertController?.close { [weak self] in
 					
-					self?.start(for: index)
+					let alertViewController:RR_Alert_ViewController = .init()
+					alertViewController.backgroundView.isUserInteractionEnabled = false
+					alertViewController.title = String(key: "game.opponents.title")
+					alertViewController.add(String(key: "game.opponents.content"))
+					(1...3).forEach { index in
+						
+						alertViewController.addButton(title: String(key: "game.opponents.button.\(index)")) { [weak self] _ in
+							
+							alertViewController.close { [weak self] in
+								
+								self?.start(for: index)
+							}
+						}
+					}
+					alertViewController.addCancelButton { [weak self] _ in
+						
+						self?.dismiss()
+					}
+					
+					alertViewController.present()
 				}
-			}
-		}
-		alertViewController.addCancelButton { [weak self] _ in
-			
-			self?.dismiss()
-		}
-		
-		alertViewController.present()
+			})
+		})
 	}
 	
 	public override func viewDidAppear(_ animated: Bool) {
@@ -1480,6 +1510,7 @@ public class RR_Game_ViewController : RR_ViewController {
 		UIView.animation {
 			
 			self.stackView.alpha = 1.0
+			self.containerStackView.addArrangedSubview(self.bannerView)
 		}
 		
 		setupDice()
@@ -1503,7 +1534,7 @@ public class RR_Game_ViewController : RR_ViewController {
 				button: String(key: "game.tutorial.players.button")
 			),
 			RR_Tutorial_ViewController.Item(
-				sourceView: turnScoreStackView,
+				sourceView: scoreLabelsStackView,
 				title: String(key: "game.tutorial.score.title"),
 				subtitle: String(key: "game.tutorial.score.subtitle"),
 				button: String(key: "game.tutorial.score.button")
