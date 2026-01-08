@@ -6,31 +6,71 @@
 //
 
 import UIKit
+import UserMessagingPlatform
 
 @main
-class AppDelegate: UIResponder, UIApplicationDelegate {
-
-
-
-	func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-		// Override point for customization after application launch.
+public class AppDelegate: UIResponder, UIApplicationDelegate {
+	
+	public var window: UIWindow?
+	
+	public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+		
+		RR_Ads.shared.start()
+		
+		window = UIWindow(frame: UIScreen.main.bounds)
+		window?.backgroundColor = Colors.Background.Application
+		
+		let navigationController:RR_NavigationController = .init(rootViewController: RR_Menu_ViewController())
+		navigationController.navigationBar.prefersLargeTitles = false
+		window?.rootViewController = navigationController
+		
+		window?.makeKeyAndVisible()
+		
+		RR_Audio.shared.playMusic()
+		
+		let parameters = RequestParameters()
+		parameters.isTaggedForUnderAgeOfConsent = false
+		
+		ConsentInformation.shared.requestConsentInfoUpdate(with: parameters) { [weak self] _ in
+			
+			ConsentForm.load { [weak self] form, _ in
+				
+				if ConsentInformation.shared.consentStatus == .required {
+					
+					form?.present(from: UI.MainController)
+				}
+				else if ConsentInformation.shared.consentStatus == .obtained {
+					
+					self?.afterLaunch()
+					NotificationCenter.post(.updateAds)
+				}
+			}
+		}
+		
 		return true
 	}
-
-	// MARK: UISceneSession Lifecycle
-
-	func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-		// Called when a new scene session is being created.
-		// Use this method to select a configuration to create the new scene with.
-		return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+	
+	public func applicationWillEnterForeground(_ application: UIApplication) {
+		
+		afterLaunch()
 	}
-
-	func application(_ application: UIApplication, didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
-		// Called when the user discards a scene session.
-		// If any sessions were discarded while the application was not running, this will be called shortly after application:didFinishLaunchingWithOptions.
-		// Use this method to release any resources that were specific to the discarded scenes, as they will not return.
+	
+	private func presentAdAppOpening() {
+		
+		RR_Ads.shared.presentAppOpening {
+			
+			let currentPlayer:RR_Player = .current
+			if currentPlayer.name == nil {
+				
+				let alertController:RR_Player_Name_Alert_ViewController = .init()
+				alertController.backgroundView.isUserInteractionEnabled = false
+				alertController.present()
+			}
+		}
 	}
-
-
+	
+	private func afterLaunch() {
+		
+		presentAdAppOpening()
+	}
 }
-

@@ -6,6 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D40C7FD62F0702B60058B376 /* SnapKit in Frameworks */ = {isa = PBXBuildFile; productRef = D40C7FD52F0702B60058B376 /* SnapKit */; };
+		D4831BF22F0FF9F9001F2C68 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = D4831BF12F0FF9F9001F2C68 /* GoogleMobileAds */; };
+		D4831BFE2F1000B2001F2C68 /* GoogleUserMessagingPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = D4831BFD2F1000B2001F2C68 /* GoogleUserMessagingPlatform */; };
+		D4CA70412F0D671D0071E083 /* SPConfetti in Frameworks */ = {isa = PBXBuildFile; productRef = D4CA70402F0D671D0071E083 /* SPConfetti */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		D40C7F9F2F0701570058B376 /* Rollrisk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rollrisk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -14,7 +21,7 @@
 		D40C7FB12F0701590058B376 /* Exceptions for "Rollrisk" folder in "Rollrisk" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				"Resources/Supporting Files/Info.plist",
 			);
 			target = D40C7F9E2F0701570058B376 /* Rollrisk */;
 		};
@@ -36,6 +43,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D4831BF22F0FF9F9001F2C68 /* GoogleMobileAds in Frameworks */,
+				D40C7FD62F0702B60058B376 /* SnapKit in Frameworks */,
+				D4831BFE2F1000B2001F2C68 /* GoogleUserMessagingPlatform in Frameworks */,
+				D4CA70412F0D671D0071E083 /* SPConfetti in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +89,10 @@
 			);
 			name = Rollrisk;
 			packageProductDependencies = (
+				D40C7FD52F0702B60058B376 /* SnapKit */,
+				D4CA70402F0D671D0071E083 /* SPConfetti */,
+				D4831BF12F0FF9F9001F2C68 /* GoogleMobileAds */,
+				D4831BFD2F1000B2001F2C68 /* GoogleUserMessagingPlatform */,
 			);
 			productName = Rollrisk;
 			productReference = D40C7F9F2F0701570058B376 /* Rollrisk.app */;
@@ -107,6 +122,12 @@
 			);
 			mainGroup = D40C7F962F0701570058B376;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D40C7FD42F0702B60058B376 /* XCRemoteSwiftPackageReference "SnapKit" */,
+				D4CA703F2F0D671D0071E083 /* XCRemoteSwiftPackageReference "SPConfetti" */,
+				D4831BF02F0FF9F9001F2C68 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+				D4831BFC2F1000B2001F2C68 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D40C7FA02F0701570058B376 /* Products */;
 			projectDirPath = "";
@@ -147,12 +168,11 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = K73XJ748R3;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Rollrisk/Info.plist;
+				INFOPLIST_FILE = "Rollrisk/Resources/Supporting Files/Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -179,12 +199,11 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = K73XJ748R3;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Rollrisk/Info.plist;
+				INFOPLIST_FILE = "Rollrisk/Resources/Supporting Files/Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -345,6 +364,64 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D40C7FD42F0702B60058B376 /* XCRemoteSwiftPackageReference "SnapKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SnapKit/SnapKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.7.1;
+			};
+		};
+		D4831BF02F0FF9F9001F2C68 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.14.0;
+			};
+		};
+		D4831BFC2F1000B2001F2C68 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-user-messaging-platform.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
+		D4CA703F2F0D671D0071E083 /* XCRemoteSwiftPackageReference "SPConfetti" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ivanvorobei/SPConfetti";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D40C7FD52F0702B60058B376 /* SnapKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D40C7FD42F0702B60058B376 /* XCRemoteSwiftPackageReference "SnapKit" */;
+			productName = SnapKit;
+		};
+		D4831BF12F0FF9F9001F2C68 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D4831BF02F0FF9F9001F2C68 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+		D4831BFD2F1000B2001F2C68 /* GoogleUserMessagingPlatform */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D4831BFC2F1000B2001F2C68 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */;
+			productName = GoogleUserMessagingPlatform;
+		};
+		D4CA70402F0D671D0071E083 /* SPConfetti */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D4CA703F2F0D671D0071E083 /* XCRemoteSwiftPackageReference "SPConfetti" */;
+			productName = SPConfetti;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D40C7F972F0701570058B376 /* Project object */;
 }
