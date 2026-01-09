@@ -1,6 +1,6 @@
-# CinqMille 🎲
+# Cinq Mille 🎲
 
-Bienvenue sur **CinqMille**, l'application iOS du célèbre jeu de dés 5000 (aussi appelé Farkle ou Dix Mille).
+Bienvenue sur **Cinq Mille**, l'application iOS du célèbre jeu de dés 5000 (aussi appelé Farkle ou Dix Mille).
 
 ## Le Concept
 
