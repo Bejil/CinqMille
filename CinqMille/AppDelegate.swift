@@ -20,32 +20,37 @@ public class AppDelegate: UIResponder, UIApplicationDelegate {
 		window = UIWindow(frame: UIScreen.main.bounds)
 		window?.backgroundColor = Colors.Background.Application
 		
-		let navigationController:CM_NavigationController = .init(rootViewController: CM_Menu_ViewController())
-		navigationController.navigationBar.prefersLargeTitles = false
-		window?.rootViewController = navigationController
+		let splashscreenViewController:CM_Splashscreen_ViewController = .init()
+		splashscreenViewController.completion = { [weak self] in
+			
+			let navigationController:CM_NavigationController = .init(rootViewController: CM_Menu_ViewController())
+			navigationController.navigationBar.prefersLargeTitles = false
+			self?.window?.rootViewController = navigationController
+			
+			let parameters = RequestParameters()
+			parameters.isTaggedForUnderAgeOfConsent = false
+			
+			ConsentInformation.shared.requestConsentInfoUpdate(with: parameters) { [weak self] _ in
+				
+				ConsentForm.load { [weak self] form, _ in
+					
+					if ConsentInformation.shared.consentStatus == .required {
+						
+						form?.present(from: UI.MainController)
+					}
+					else if ConsentInformation.shared.consentStatus == .obtained {
+						
+						self?.afterLaunch()
+						NotificationCenter.post(.updateAds)
+					}
+				}
+			}
+		}
+		window?.rootViewController = splashscreenViewController
 		
 		window?.makeKeyAndVisible()
 		
 		CM_Audio.shared.playMusic()
-		
-		let parameters = RequestParameters()
-		parameters.isTaggedForUnderAgeOfConsent = false
-		
-		ConsentInformation.shared.requestConsentInfoUpdate(with: parameters) { [weak self] _ in
-			
-			ConsentForm.load { [weak self] form, _ in
-				
-				if ConsentInformation.shared.consentStatus == .required {
-					
-					form?.present(from: UI.MainController)
-				}
-				else if ConsentInformation.shared.consentStatus == .obtained {
-					
-					self?.afterLaunch()
-					NotificationCenter.post(.updateAds)
-				}
-			}
-		}
 		
 		return true
 	}
