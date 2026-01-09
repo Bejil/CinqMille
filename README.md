@@ -1,6 +1,6 @@
-# Rollrisk 🎲
+# CinqMille 🎲
 
-Bienvenue sur **Rollrisk**, l'application iOS du célèbre jeu de dés 5000 (aussi appelé Farkle ou Dix Mille).
+Bienvenue sur **CinqMille**, l'application iOS du célèbre jeu de dés 5000 (aussi appelé Farkle ou Dix Mille).
 
 ## Le Concept
 
