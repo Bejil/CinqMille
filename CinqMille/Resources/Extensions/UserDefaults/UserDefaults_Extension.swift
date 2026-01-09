@@ -14,6 +14,9 @@ extension UserDefaults {
 		// Ads
 		case shouldDisplayAds = "shouldDisplayAds"
 		
+		//InAppPurchase
+		case inAppPurchaseAlertCapping = "inAppPurchaseAlertCapping"
+		
 		// Player
 		case currentPlayer = "currentPlayer"
 		

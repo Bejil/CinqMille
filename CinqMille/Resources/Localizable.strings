@@ -214,3 +214,14 @@
 "game.combination.fullHouse" = "Full";
 "game.combination.fiveOnes" = "5 × 1 = Victoire !";
 "game.combination.fiveFives" = "5 × 5 = Victoire !";
+
+//MARK: - InAppPurchase
+"inAppPurchase.purchase.alert.buy.button" = "Premium";
+"inAppPurchase.purchase.success.alert.title" = "Félicitations !";
+"inAppPurchase.purchase.success.alert.content" = "Tu ne seras plus ennuyé par les pubs !";
+"inAppPurchase.purchase.error.alert.content" = "L'achat a échoué ou a été annulé";
+"inAppPurchase.purchase.alert.restore.button.title" = "Restaurer";
+"inAppPurchase.purchase.alert.restore.button.subtitle" = "un précédent achat";
+"inAppPurchase.restore.success.alert.title" = "Félicitations !";
+"inAppPurchase.restore.success.alert.content" = "Ton achat a bien été restauré";
+"inAppPurchase.restore.error.content" = "Aucun achat restauré";

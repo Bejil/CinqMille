@@ -115,7 +115,7 @@ public class CM_Dice : UIView {
 	
 	// MARK: - Roll Animation
 	
-	public func roll(completion: (() -> Void)? = nil) {
+	public func roll(_ feedback:Bool = true, completion: (() -> Void)? = nil) {
 		
 		guard !isLocked else {
 			completion?()
@@ -134,7 +134,10 @@ public class CM_Dice : UIView {
 			
 			DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) { [weak self] in
 				
-				CM_Feedback.shared.make(.On)
+				if feedback {
+					
+					CM_Feedback.shared.make(.On)
+				}
 				
 				guard let self = self else { return }
 				

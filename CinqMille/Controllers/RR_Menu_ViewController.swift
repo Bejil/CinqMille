@@ -50,6 +50,7 @@ public class CM_Menu_ViewController : CM_ViewController {
 		dicesView.snp.makeConstraints { make in
 			make.top.bottom.centerX.equalToSuperview()
 		}
+		$0.addArrangedSubview(dicesContainerView)
 		
 		let titleLabel:CM_Label = .init([String(key: "menu.title.0"),String(key: "menu.title.1")].joined(separator: " "))
 		titleLabel.font = Fonts.Content.Title.H1
@@ -60,7 +61,7 @@ public class CM_Menu_ViewController : CM_ViewController {
 		let subtitleLabel:CM_Label = .init(String(key: "menu.subtitle"))
 		subtitleLabel.textAlignment = .center
 		
-		let headerStackView:UIStackView = .init(arrangedSubviews: [dicesContainerView,titleLabel,subtitleLabel])
+		let headerStackView:UIStackView = .init(arrangedSubviews: [titleLabel,subtitleLabel])
 		headerStackView.axis = .vertical
 		headerStackView.spacing = UI.Margins
 		$0.addArrangedSubview(headerStackView)
@@ -102,7 +103,7 @@ public class CM_Menu_ViewController : CM_ViewController {
 		
 		let inAppButton:CM_Button = .init(String(key: "menu.button.inApp")) { _ in
 			
-			
+			CM_InAppPurchase.shared.promptInAppPurchaseAlert(withCapping: false)
 		}
 		inAppButton.type = .navigation
 		inAppButton.titleFont = Fonts.Content.Button.Title

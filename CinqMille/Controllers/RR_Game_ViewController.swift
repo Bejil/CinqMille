@@ -491,7 +491,13 @@ public class CM_Game_ViewController : CM_ViewController {
 				
 				CM_Ads.shared.presentInterstitial(Ads.FullScreen.Game.End, nil, {
 				
-					alertController?.close()
+					alertController?.close {
+						
+						if CM_Ads.shared.shouldDisplayAd {
+							
+							CM_InAppPurchase.shared.promptInAppPurchaseAlert(withCapping: true)
+						}
+					}
 				})
 			})
 		}
