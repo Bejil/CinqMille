@@ -27,66 +27,66 @@ public struct UI {
 
 public struct Colors {
 	
-	public static let Primary:UIColor = UIColor(named: "Primary")!
-	public static let Secondary:UIColor = UIColor(named: "Secondary")!
-	public static let Tertiary:UIColor = UIColor(named: "Tertiary")!
+	public static var Primary:UIColor { CM_Theme.shared.primary }
+	public static var Secondary:UIColor { CM_Theme.shared.secondary }
+	public static var Tertiary:UIColor { CM_Theme.shared.tertiary }
 	
 	public struct Background {
 		
-		public static let Application:UIColor = UIColor(named: "ApplicationBackground")!
-		public static let View:UIColor = UIColor(named: "ViewBackground")!
+		public static var Application:UIColor { CM_Theme.shared.applicationBackground }
+		public static var View:UIColor { CM_Theme.shared.viewBackground }
 	}
 	
 	public struct Navigation {
 		
-		public static let Title:UIColor = UIColor(named: "NavigationTitle")!
-		public static let Button:UIColor = UIColor(named: "NavigationButton")!
+		public static var Title:UIColor { CM_Theme.shared.navigationTitle }
+		public static var Button:UIColor { CM_Theme.shared.navigationButton }
 	}
 	
 	public struct Content {
 		
-		public static let Title:UIColor = UIColor(named: "ContentTitle")!
-		public static let Text:UIColor = UIColor(named: "ContentText")!
+		public static var Title:UIColor { CM_Theme.shared.contentTitle }
+		public static var Text:UIColor { CM_Theme.shared.contentText }
 	}
 	
 	public struct Button {
 		
-		public static let Badge:UIColor = UIColor(named: "ButtonBadge")!
+		public static var Badge:UIColor { CM_Theme.shared.buttonBadge }
 		
 		public struct Primary {
 			
-			public static let Background:UIColor = UIColor(named: "ButtonPrimaryBackground")!
-			public static let Content:UIColor = UIColor(named: "ButtonPrimaryContent")!
+			public static var Background:UIColor { CM_Theme.shared.buttonPrimaryBackground }
+			public static var Content:UIColor { CM_Theme.shared.buttonPrimaryContent }
 		}
 		
 		public struct Secondary {
 			
-			public static let Background:UIColor = UIColor(named: "ButtonSecondaryBackground")!
-			public static let Content:UIColor = UIColor(named: "ButtonSecondaryContent")!
+			public static var Background:UIColor { CM_Theme.shared.buttonSecondaryBackground }
+			public static var Content:UIColor { CM_Theme.shared.buttonSecondaryContent }
 		}
 		
 		public struct Tertiary {
 			
-			public static let Background:UIColor = UIColor(named: "ButtonTertiaryBackground")!
-			public static let Content:UIColor = UIColor(named: "ButtonTertiaryContent")!
+			public static var Background:UIColor { CM_Theme.shared.buttonTertiaryBackground }
+			public static var Content:UIColor { CM_Theme.shared.buttonTertiaryContent }
 		}
 		
 		public struct Delete {
 			
-			public static let Background:UIColor = UIColor(named: "ButtonDeleteBackground")!
-			public static let Content:UIColor = UIColor(named: "ButtonDeleteContent")!
+			public static var Background:UIColor { CM_Theme.shared.buttonDeleteBackground }
+			public static var Content:UIColor { CM_Theme.shared.buttonDeleteContent }
 		}
 		
 		public struct Navigation {
 			
-			public static let Background:UIColor = UIColor(named: "ButtonNavigationBackground")!
-			public static let Content:UIColor = UIColor(named: "ButtonNavigationContent")!
+			public static var Background:UIColor { CM_Theme.shared.buttonNavigationBackground }
+			public static var Content:UIColor { CM_Theme.shared.buttonNavigationContent }
 		}
 		
 		public struct Text {
 			
-			public static let Background:UIColor = UIColor(named: "ButtonTextBackground")!
-			public static let Content:UIColor = UIColor(named: "ButtonTextContent")!
+			public static var Background:UIColor { CM_Theme.shared.buttonTextBackground }
+			public static var Content:UIColor { CM_Theme.shared.buttonTextContent }
 		}
 	}
 }

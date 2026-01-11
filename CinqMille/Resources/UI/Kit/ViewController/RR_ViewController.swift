@@ -27,11 +27,23 @@ public class CM_ViewController: UIViewController {
 		}
 	}
 	
+	private var themeObserver: NSObjectProtocol?
+	
 	public override func loadView() {
 		
 		super.loadView()
 		
 		view.backgroundColor = Colors.Background.View
+	}
+	
+	public override func viewDidLoad() {
+		
+		super.viewDidLoad()
+		
+		// Observer le changement de thème
+		themeObserver = NotificationCenter.default.addObserver(forName: .themeDidChange, object: nil, queue: .main) { [weak self] _ in
+			self?.applyTheme()
+		}
 	}
 	
 	public override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
@@ -110,6 +122,13 @@ public class CM_ViewController: UIViewController {
 		fatalError("init(coder:) has not been implemented")
 	}
 	
+	deinit {
+		
+		if let observer = themeObserver {
+			NotificationCenter.default.removeObserver(observer)
+		}
+	}
+	
 	public func close() {
 		
 		dismiss()
@@ -118,5 +137,34 @@ public class CM_ViewController: UIViewController {
 	public func dismiss(_ completion:(()->Void)? = nil) {
 		
 		dismiss(animated: true, completion: completion)
+	}
+	
+	// MARK: - Theme
+	
+	/// Méthode appelée quand le thème change. Override dans les sous-classes pour mettre à jour les couleurs.
+	@objc open func applyTheme() {
+		
+		UIView.animate(withDuration: 0.3) {
+			
+			self.view.backgroundColor = Colors.Background.View
+			
+			// Mettre à jour la navigation bar
+			self.navigationController?.navigationBar.tintColor = Colors.Navigation.Button
+			
+			let appearance = UINavigationBarAppearance()
+			appearance.configureWithTransparentBackground()
+			appearance.largeTitleTextAttributes = [
+				.font: Fonts.Navigation.Title.Large,
+				.foregroundColor: Colors.Navigation.Title
+			]
+			appearance.titleTextAttributes = [
+				.font: Fonts.Navigation.Title.Small,
+				.foregroundColor: Colors.Navigation.Title
+			]
+			
+			self.navigationController?.navigationBar.standardAppearance = appearance
+			self.navigationController?.navigationBar.compactAppearance = appearance
+			self.navigationController?.navigationBar.scrollEdgeAppearance = appearance
+		}
 	}
 }

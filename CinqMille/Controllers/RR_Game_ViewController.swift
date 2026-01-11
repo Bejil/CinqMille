@@ -47,6 +47,8 @@ public class CM_Game_ViewController : CM_ViewController {
 	private var lastRoundTriggerPlayerIndex:Int? = nil
 	/// Ensemble des joueurs qui ont déjà joué leur dernier tour
 	private var playersWhoPlayedLastRound:Set<Int> = []
+	/// Flag pour empêcher les appels multiples à handleVictory
+	private var victoryHandled:Bool = false
 	lazy var stackView:UIStackView = {
 		
 		$0.alpha = 0.0
@@ -832,6 +834,10 @@ public class CM_Game_ViewController : CM_ViewController {
 	
 	private func handleVictory(for winner:CM_Player) {
 		
+		// Empêcher les appels multiples
+		guard !victoryHandled else { return }
+		victoryHandled = true
+		
 		isAIPlaying = false
 		
 		// Réinitialiser l'état du dernier tour
@@ -845,7 +851,7 @@ public class CM_Game_ViewController : CM_ViewController {
 			CM_Feedback.shared.make(.On)
 		}
 		// En mode solo, sauvegarder les stats du joueur
-		else if winner == players.first {
+		else if winner == CM_Player.current {
 			
 			CM_Audio.shared.playSound(.Success)
 			CM_Feedback.shared.make(.On)
@@ -867,7 +873,7 @@ public class CM_Game_ViewController : CM_ViewController {
 		// Afficher l'alerte de victoire
 		let alert = CM_Alert_ViewController()
 		alert.title = String(key: "game.victory.title")
-		alert.add(String(format: String(key: "game.victory.content"), winner.name ?? "?", winner.score))
+		alert.add(winner == CM_Player.current ? String(key: "game.victory.content.currentPlayer") : String(format: String(key: "game.victory.content"), winner.name ?? "?"))
 		alert.addButton(title: String(key: "game.victory.button")) { [weak self] _ in
 			
 			alert.close { [weak self] in
@@ -878,7 +884,11 @@ public class CM_Game_ViewController : CM_ViewController {
 			}
 		}
 		alert.present {
-			CM_Confettis.start()
+			
+			if winner == CM_Player.current {
+				
+				CM_Confettis.start()
+			}
 		}
 	}
 	
@@ -917,7 +927,10 @@ public class CM_Game_ViewController : CM_ViewController {
 				return player1.element.score < player2.element.score
 			})?.element else { return }
 			
-			handleVictory(for: winner)
+			// Petit délai pour s'assurer que les tutoriels/alertes précédents sont fermés
+			DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+				self?.handleVictory(for: winner)
+			}
 		} else {
 			// Réinitialiser le flag IA si c'était son tour
 			if !isCurrentPlayerHuman() {
@@ -1642,6 +1655,7 @@ public class CM_Game_ViewController : CM_ViewController {
 		isLastRound = false
 		lastRoundTriggerPlayerIndex = nil
 		playersWhoPlayedLastRound.removeAll()
+		victoryHandled = false
 		
 		UIView.animation {
 			
@@ -1764,6 +1778,7 @@ public class CM_Game_ViewController : CM_ViewController {
 				
 				if potentialTotal > CM_Rules.shared.targetScore {
 					showDiceSelectionError(dice)
+					showExceedScoreTutorial()
 					return
 				}
 			}
@@ -2029,6 +2044,30 @@ public class CM_Game_ViewController : CM_ViewController {
 		animation.duration = 0.3
 		animation.values = [-5, 5, -5, 5, 0]
 		dice.layer.add(animation, forKey: "shake")
+	}
+	
+	/// Flag pour éviter d'afficher le tutoriel de dépassement plusieurs fois
+	private var exceedScoreTutorialShown:Bool = false
+	
+	/// Affiche un tutoriel expliquant que le dé ferait dépasser le score maximum
+	private func showExceedScoreTutorial() {
+		
+		// Ne pas afficher si déjà montré ce tour
+		guard !exceedScoreTutorialShown else { return }
+		exceedScoreTutorialShown = true
+		
+		let viewController:CM_Tutorial_ViewController = .init()
+		viewController.items = [
+			CM_Tutorial_ViewController.Item(
+				title: String(key: "game.exceedScore.tutorial.title"),
+				subtitle: String(key: "game.exceedScore.tutorial.subtitle"),
+				timeInterval: 2.5
+			)
+		]
+		viewController.completion = { [weak self] in
+			self?.exceedScoreTutorialShown = false
+		}
+		viewController.present()
 	}
 	
 	/// Détecte le nom de la combinaison formée par les dés

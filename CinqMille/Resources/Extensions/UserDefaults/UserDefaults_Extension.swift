@@ -53,6 +53,9 @@ extension UserDefaults {
 		case gameTutorialShown = "gameTutorialShown"
 		case diceSelectionTutorialShown = "diceSelectionTutorialShown"
 		case selectedDiceTutorialShown = "selectedDiceTutorialShown"
+		
+		// Theme
+		case theme = "theme"
 	}
 	
 	public static func set(_ value:Any?, _ key:UserDefaults.Keys) {

@@ -139,6 +139,8 @@ public class CM_Button : UIButton {
 		return $0
 	}(CAShapeLayer())
 	
+	private var themeObserver: NSObjectProtocol?
+	
 	// MARK: - Initialization
 	convenience init(_ title: String? = nil, _ handler: Handler = nil) {
 		self.init(frame: .zero)
@@ -151,10 +153,20 @@ public class CM_Button : UIButton {
 	public override init(frame: CGRect) {
 		super.init(frame: frame)
 		setupButton()
+		
+		themeObserver = NotificationCenter.default.addObserver(forName: .themeDidChange, object: nil, queue: .main) { [weak self] _ in
+			self?.updateAppearance()
+		}
 	}
 	
 	required init?(coder: NSCoder) {
 		fatalError("init(coder:) has not been implemented")
+	}
+	
+	deinit {
+		if let observer = themeObserver {
+			NotificationCenter.default.removeObserver(observer)
+		}
 	}
 	
 	// MARK: - Setup

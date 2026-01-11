@@ -59,6 +59,16 @@ public class CM_Settings_ViewController : CM_ViewController {
 		return $0
 		
 	}(CM_Switch())
+	private lazy var themeButton:CM_Button = {
+		
+		$0.type = .secondary
+		$0.image = UIImage(systemName: "paintpalette.fill")
+		return $0
+		
+	}(CM_Button() { [weak self] _ in
+		
+		self?.showThemeAlert()
+	})
 	private lazy var targetScoreSegment:CM_SegmentedControl = {
 		
 		$0.addAction(.init(handler: { [weak self] _ in
@@ -209,6 +219,7 @@ public class CM_Settings_ViewController : CM_ViewController {
 		$0.axis = .vertical
 		$0.spacing = 2.5*UI.Margins
 		$0.addArrangedSubview(playerButton)
+		$0.addArrangedSubview(themeButton)
 		$0.addArrangedSubview(sectionStackView(with: [
 			sectionTitle(String(key: "settings.audio.title")),
 			settingRow(title: String(key: "settings.audio.music"), description: String(key: "settings.audio.music.description"), control: musicToggle),
@@ -277,6 +288,7 @@ public class CM_Settings_ViewController : CM_ViewController {
 		stackView.animate()
 		
 		updatePlayerButton()
+		updateThemeButton()
 		updateAudioToggles()
 		updateRulesControls()
 	}
@@ -327,6 +339,42 @@ public class CM_Settings_ViewController : CM_ViewController {
 		let player = CM_Player.current
 		playerButton.title = String(key: "settings.name")
 		playerButton.subtitle = player.name
+	}
+	
+	private func updateThemeButton() {
+		
+		themeButton.title = String(key: "settings.theme")
+		themeButton.subtitle = CM_Theme.shared.current.name
+	}
+	
+	private func showThemeAlert() {
+		
+		let alert = UIAlertController(
+			title: String(key: "settings.theme.title"),
+			message: String(key: "settings.theme.description"),
+			preferredStyle: .actionSheet
+		)
+		
+		for theme in CM_ThemeType.allCases {
+			
+			let action = UIAlertAction(title: theme.name, style: .default) { [weak self] _ in
+				
+				CM_Theme.shared.current = theme
+				CM_Audio.shared.playSound(.Button)
+				self?.updateThemeButton()
+			}
+			
+			// Ajouter une coche pour le thème actuel
+			if theme == CM_Theme.shared.current {
+				action.setValue(true, forKey: "checked")
+			}
+			
+			alert.addAction(action)
+		}
+		
+		alert.addAction(UIAlertAction(title: String(key: "alert.cancel.button"), style: .cancel))
+		
+		present(alert, animated: true)
 	}
 	
 	private func updateAudioToggles() {

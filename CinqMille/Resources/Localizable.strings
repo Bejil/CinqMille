@@ -58,6 +58,14 @@
 //MARK: - Settings
 "settings.title" = "Réglages";
 "settings.name" = "Modifiez votre nom";
+"settings.theme.title" = "Thème";
+"settings.theme" = "Apparence";
+"settings.theme.description" = "Personnalisez les couleurs de l'application";
+"settings.theme.classic" = "Classique";
+"settings.theme.ocean" = "Océan";
+"settings.theme.sunset" = "Crépuscule";
+"settings.theme.forest" = "Forêt";
+"settings.theme.neon" = "Néon";
 "settings.audio.title" = "Audio";
 "settings.audio.music" = "Musique";
 "settings.audio.music.description" = "Musique de fond pendant le jeu";
@@ -160,8 +168,8 @@
 "game.player.scores.turn" = "Tour";
 "game.player.scores.total" = "Total";
 "game.victory.title" = "Victoire !";
-"game.victory.content.currentPlayer" = "Vous remportez la partie avec %d points !";
-"game.victory.content" = "%@ remporte la partie avec %d points !";
+"game.victory.content.currentPlayer" = "Vous remportez la partie !";
+"game.victory.content" = "%@ remporte la partie !";
 "game.victory.button" = "Retour au menu";
 "game.close.alert.title" = "Attention";
 "game.close.alert.content" = "Souhaitez-vous réellement quitter la partie ?";
@@ -200,6 +208,8 @@
 "dices.player.name.button" = "Suivant";
 "dices.turn.title" = "À votre tour !";
 "game.equality.tutorial.subtitle.player" = "revient à son précédent score";
+"game.exceedScore.tutorial.title" = "Score maximum";
+"game.exceedScore.tutorial.subtitle" = "Ce dé vous ferait dépasser l'objectif.\nChoisissez un autre dé ou validez votre tour.";
 
 //MARK: - Combinations
 "game.combination.subtitle" = "Combinaison !";

@@ -10,4 +10,5 @@ import Foundation
 extension Notification.Name {
 	
 	static let updateAds = Notification.Name("updateAds")
+	static let themeDidChange = Notification.Name("themeDidChange")
 }

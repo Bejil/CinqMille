@@ -10,6 +10,15 @@ import UIKit
 
 public class CM_Label : UILabel {
 	
+	public enum ThemeColorType {
+		case text
+		case title
+		case custom
+	}
+	
+	private var themeObserver: NSObjectProtocol?
+	private var themeColorType: ThemeColorType = .text
+	
 	public var contentInsets:UIEdgeInsets = .zero {
 		
 		didSet {
@@ -28,6 +37,21 @@ public class CM_Label : UILabel {
 		}
 	}
 	
+	public override var textColor: UIColor! {
+		
+		didSet {
+			
+			// Détecter automatiquement le type de couleur du thème utilisée
+			if textColor == Colors.Content.Title {
+				themeColorType = .title
+			} else if textColor == Colors.Content.Text {
+				themeColorType = .text
+			} else {
+				themeColorType = .custom
+			}
+		}
+	}
+	
 	convenience init(_ string:String?) {
 		
 		self.init(frame: .zero)
@@ -42,11 +66,42 @@ public class CM_Label : UILabel {
 		numberOfLines = 0
 		font = Fonts.Content.Text.Regular
 		textColor = Colors.Content.Text
+		themeColorType = .text
+		
+		themeObserver = NotificationCenter.default.addObserver(forName: .themeDidChange, object: nil, queue: .main) { [weak self] _ in
+			self?.applyTheme()
+		}
 	}
 	
 	required init?(coder: NSCoder) {
 		
 		fatalError("init(coder:) has not been implemented")
+	}
+	
+	deinit {
+		
+		if let observer = themeObserver {
+			NotificationCenter.default.removeObserver(observer)
+		}
+	}
+	
+	private func applyTheme() {
+		
+		let currentType = themeColorType
+		
+		UIView.animate(withDuration: 0.3) {
+			switch currentType {
+			case .text:
+				self.textColor = Colors.Content.Text
+			case .title:
+				self.textColor = Colors.Content.Title
+			case .custom:
+				break // Ne pas changer les couleurs personnalisées
+			}
+		}
+		
+		// Restaurer le type après l'animation (car le didSet l'a changé)
+		themeColorType = currentType
 	}
 	
 	public override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
