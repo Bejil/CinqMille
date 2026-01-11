@@ -66,22 +66,28 @@ public class CM_Menu_ViewController : CM_ViewController {
 		headerStackView.spacing = UI.Margins
 		$0.addArrangedSubview(headerStackView)
 		
-		let newGameButton:CM_Button = .init(String(key: "menu.button.newGame")) { _ in
+		let newGameButton:CM_Button = .init(String(key: "menu.button.newGame")) { [weak self] _ in
 			
 			let alertController:CM_Alert_ViewController = .init()
 			alertController.title = String(key: "newGame.alert.title")
-			alertController.addButton(title: String(key: "newGame.alert.solo")) { _ in
+			alertController.addButton(title: String(key: "newGame.alert.solo")) { [weak self] _ in
 				
-				alertController.close {
+				alertController.close { [weak self] in
 					
-					UI.MainController.present(CM_NavigationController(rootViewController: CM_Game_ViewController()), animated: true)
+					self?.presentGameStartAd {
+						
+						UI.MainController.present(CM_NavigationController(rootViewController: CM_Game_ViewController()), animated: true)
+					}
 				}
 			}
-			alertController.addButton(title: String(key: "newGame.alert.dices")) { _ in
+			alertController.addButton(title: String(key: "newGame.alert.dices")) { [weak self] _ in
 				
-				alertController.close {
+				alertController.close { [weak self] in
 					
-					UI.MainController.present(CM_NavigationController(rootViewController: CM_Dices_ViewController()), animated: true)
+					self?.presentGameStartAd {
+						
+						UI.MainController.present(CM_NavigationController(rootViewController: CM_Dices_ViewController()), animated: true)
+					}
 				}
 			}
 			alertController.addCancelButton()
@@ -179,5 +185,16 @@ public class CM_Menu_ViewController : CM_ViewController {
 		super.viewWillAppear(animated)
 		
 		bannerView.refresh()
+	}
+	
+	private func presentGameStartAd(_ completion:(()->Void)?) {
+		
+		CM_Alert_ViewController.presentLoading({ [weak self] alertController in
+			
+			CM_Ads.shared.presentInterstitial(Ads.FullScreen.Game.Start, nil, { [weak self] in
+				
+				alertController?.close(completion)
+			})
+		})
 	}
 }

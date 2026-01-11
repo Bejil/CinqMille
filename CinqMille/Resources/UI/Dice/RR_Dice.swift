@@ -151,13 +151,19 @@ public class CM_Dice : UIView {
 				// Animation de rebond
 				UIView.animate(withDuration: stepDuration * 0.5, delay: 0, options: [.curveEaseInOut]) {
 					
-					self.transform = CGAffineTransform(rotationAngle: .pi * CGFloat(step) / 3)
+					self.transform = CGAffineTransform(scaleX: 0.9, y: 0.9).rotated(by: .pi * CGFloat(step) / 3)
+					
+				} completion: { _ in
+					
+					UIView.animate(withDuration: stepDuration * 0.5, delay: 0, options: [.curveEaseInOut]) {
+						
+						self.transform = .identity
+					}
 				}
 				
 				if step == animationSteps - 1 {
 					
 					DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration) {
-						
 						completion?()
 					}
 				}

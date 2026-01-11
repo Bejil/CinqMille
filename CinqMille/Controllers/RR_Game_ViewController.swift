@@ -1579,36 +1579,27 @@ public class CM_Game_ViewController : CM_ViewController {
 	public override func viewWillAppear(_ animated: Bool) {
 		
 		super.viewWillAppear(animated)
-		
-		CM_Alert_ViewController.presentLoading({ [weak self] alertController in
+					
+		let alertViewController:CM_Alert_ViewController = .init()
+		alertViewController.backgroundView.isUserInteractionEnabled = false
+		alertViewController.title = String(key: "game.opponents.title")
+		alertViewController.add(String(key: "game.opponents.content"))
+		(1...3).forEach { index in
 			
-			CM_Ads.shared.presentInterstitial(Ads.FullScreen.Game.Start, nil, { [weak self] in
+			alertViewController.addButton(title: String(key: "game.opponents.button.\(index)")) { [weak self] _ in
 				
-				alertController?.close { [weak self] in
+				alertViewController.close { [weak self] in
 					
-					let alertViewController:CM_Alert_ViewController = .init()
-					alertViewController.backgroundView.isUserInteractionEnabled = false
-					alertViewController.title = String(key: "game.opponents.title")
-					alertViewController.add(String(key: "game.opponents.content"))
-					(1...3).forEach { index in
-						
-						alertViewController.addButton(title: String(key: "game.opponents.button.\(index)")) { [weak self] _ in
-							
-							alertViewController.close { [weak self] in
-								
-								self?.start(for: index)
-							}
-						}
-					}
-					alertViewController.addCancelButton { [weak self] _ in
-						
-						self?.dismiss()
-					}
-					
-					alertViewController.present()
+					self?.start(for: index)
 				}
-			})
-		})
+			}
+		}
+		alertViewController.addCancelButton { [weak self] _ in
+			
+			self?.dismiss()
+		}
+		
+		alertViewController.present()
 	}
 	
 	public override func viewDidAppear(_ animated: Bool) {
