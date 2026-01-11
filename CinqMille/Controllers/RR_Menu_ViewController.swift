@@ -41,8 +41,8 @@ public class CM_Menu_ViewController : CM_ViewController {
 		
 		rollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true, block: { _ in
 			
-			firstDice.roll()
-			secondDice.roll()
+			firstDice.roll(false)
+			secondDice.roll(false)
 		})
 		
 		let dicesContainerView:UIView = .init()

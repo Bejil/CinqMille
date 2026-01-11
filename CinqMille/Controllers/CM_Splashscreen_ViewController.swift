@@ -18,11 +18,11 @@ public class CM_Splashscreen_ViewController : CM_ViewController {
 		
 		let firstDice:CM_Dice = .init()
 		firstDice.transform = .init(rotationAngle: .pi/3)
-		firstDice.roll()
+		firstDice.roll(false)
 		
 		let secondDice:CM_Dice = .init()
 		secondDice.transform = .init(rotationAngle: .pi/3)
-		secondDice.roll()
+		secondDice.roll(false)
 		
 		let dicesView:UIView = .init()
 		dicesView.addSubview(secondDice)
