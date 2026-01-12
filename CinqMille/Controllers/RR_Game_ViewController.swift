@@ -38,6 +38,7 @@ public class CM_Game_ViewController : CM_ViewController {
 	var currentRollNumber:Int = 0
 	private var isAIPlaying:Bool = false // Indique si l'IA est en train de jouer
 	private var aiTurnId:Int = 0 // Identifiant unique du tour IA pour annuler les appels asynchrones
+	private var rollId:Int = 0 // Identifiant unique du lancer pour annuler les callbacks si interrompu
 	
 	// MARK: - Dernier tour
 	
@@ -246,6 +247,7 @@ public class CM_Game_ViewController : CM_ViewController {
 		// Arrêter l'IA en cours et invalider les appels asynchrones
 		isAIPlaying = false
 		aiTurnId += 1
+		rollId += 1 // Invalider les callbacks de lancer en cours
 		isRolling = false
 		
 		// Arrêter toutes les animations des dés
@@ -273,32 +275,51 @@ public class CM_Game_ViewController : CM_ViewController {
 					currentPlayer.hasOpened = true
 				}
 				
-				// Appliquer la règle d'égalité
-				if rules.equalityKnockback {
-					applyEqualityKnockback(for: currentPlayer, newScore: currentPlayer.score)
-				}
+				let newScore = currentPlayer.score
+				updatePlayersDisplay()
 				
-				// Vérifier si l'IA a atteint l'objectif
-				if currentPlayer.score >= rules.targetScore {
-					updatePlayersDisplay()
+				// Appliquer la règle d'égalité (avec callback pour attendre la fermeture du tutoriel)
+				let continueAfterEquality = { [weak self] in
+					guard let self = self else { return }
 					
-					// Gérer le dernier tour
-					if !isLastRound {
-						isLastRound = true
-						lastRoundTriggerPlayerIndex = currentPlayerIndex
-						playersWhoPlayedLastRound.insert(currentPlayerIndex)
+					// Vérifier si l'IA a atteint l'objectif
+					if newScore >= rules.targetScore {
 						
-						// Afficher le tutoriel "Dernier tour"
-						showLastRoundTutorial {
-							self.proceedAfterSkipAI()
+						// Gérer le dernier tour
+						if !self.isLastRound {
+							self.isLastRound = true
+							self.lastRoundTriggerPlayerIndex = self.currentPlayerIndex
+							self.playersWhoPlayedLastRound.insert(self.currentPlayerIndex)
+							
+							// Afficher le tutoriel "Dernier tour"
+							self.showLastRoundTutorial {
+								self.proceedAfterSkipAI()
+							}
+							return
+						} else {
+							self.playersWhoPlayedLastRound.insert(self.currentPlayerIndex)
+							self.checkEndOfLastRound()
+							return
 						}
-						return
-					} else {
-						playersWhoPlayedLastRound.insert(currentPlayerIndex)
-						checkEndOfLastRound()
+					}
+					
+					// Si on est dans le dernier tour mais l'IA n'a pas atteint l'objectif
+					if self.isLastRound {
+						self.playersWhoPlayedLastRound.insert(self.currentPlayerIndex)
+						self.checkEndOfLastRound()
 						return
 					}
+					
+					// Continuer normalement
+					self.proceedAfterSkipAI()
 				}
+				
+				if rules.equalityKnockback {
+					applyEqualityKnockback(for: currentPlayer, newScore: newScore, completion: continueAfterEquality)
+				} else {
+					continueAfterEquality()
+				}
+				return
 			}
 		}
 		
@@ -327,6 +348,8 @@ public class CM_Game_ViewController : CM_ViewController {
 	private func proceedAfterSkipAI() {
 		
 		// Réinitialiser l'état du tour
+		isRolling = false
+		isAIPlaying = false
 		hasRolledThisTurn = false
 		scoringDiceIndices.removeAll()
 		currentRollNumber = 0
@@ -523,6 +546,10 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		isRolling = true
 		
+		// Incrémenter le rollId pour invalider les callbacks d'un éventuel lancer précédent
+		rollId += 1
+		let currentRollId = rollId
+		
 		// Masquer les placeholders et hints pendant le lancer
 		rollHintLabel.alpha = 0.0
 		rollPlaceholderLabel.isHidden = true
@@ -593,6 +620,9 @@ public class CM_Game_ViewController : CM_ViewController {
 		group.notify(queue: .main) { [weak self] in
 			
 			guard let self = self else { return }
+			
+			// Ignorer si le lancer a été interrompu (tour passé)
+			guard self.rollId == currentRollId else { return }
 			
 			self.isRolling = false
 			self.calculateTurnScore()
@@ -743,11 +773,6 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		let newScore = currentPlayer.score
 		
-		// Appliquer la règle d'égalité si activée
-		if rules.equalityKnockback {
-			applyEqualityKnockback(for: currentPlayer, newScore: newScore)
-		}
-		
 		// Marquer que le joueur a ouvert s'il ne l'avait pas encore fait
 		if !currentPlayer.hasOpened {
 			currentPlayer.hasOpened = true
@@ -755,6 +780,22 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		// Mettre à jour l'affichage
 		updatePlayersDisplay()
+		
+		// Appliquer la règle d'égalité si activée (avec callback pour attendre la fermeture du tutoriel)
+		let continueAfterEquality = { [weak self] in
+			guard let self = self else { return }
+			self.handlePostValidation(currentPlayer: currentPlayer, newScore: newScore, rules: rules)
+		}
+		
+		if rules.equalityKnockback {
+			applyEqualityKnockback(for: currentPlayer, newScore: newScore, completion: continueAfterEquality)
+		} else {
+			continueAfterEquality()
+		}
+	}
+	
+	/// Continue la logique de validation après l'affichage éventuel du tutoriel d'égalité
+	private func handlePostValidation(currentPlayer: CM_Player, newScore: Int, rules: CM_Rules) {
 		
 		// Vérifier si le joueur a atteint l'objectif
 		if newScore >= rules.targetScore {
@@ -800,21 +841,33 @@ public class CM_Game_ViewController : CM_ViewController {
 	}
 	
 	/// Applique la règle d'égalité : si un joueur atteint le même score qu'un autre, l'autre retombe à son score précédent
-	private func applyEqualityKnockback(for currentPlayer:CM_Player, newScore:Int) {
+	/// Retourne true si un knockback a été appliqué (et un tutoriel affiché)
+	@discardableResult
+	private func applyEqualityKnockback(for currentPlayer:CM_Player, newScore:Int, completion: (() -> Void)? = nil) -> Bool {
+		
+		var hasKnockback = false
 		
 		for player in players where player != currentPlayer {
 			
 			if player.score == newScore && !player.scores.isEmpty {
 				// Le joueur perd son dernier score (retombe à son score précédent)
 				let lastScore = player.scores.removeLast()
+				hasKnockback = true
 				
 				// Afficher une notification de knockback
-				showKnockbackNotification(player: player, lostPoints: lastScore)
+				showKnockbackNotification(player: player, lostPoints: lastScore, completion: completion)
 			}
 		}
+		
+		// Si pas de knockback, appeler le completion immédiatement
+		if !hasKnockback {
+			completion?()
+		}
+		
+		return hasKnockback
 	}
 	
-	private func showKnockbackNotification(player:CM_Player, lostPoints:Int) {
+	private func showKnockbackNotification(player:CM_Player, lostPoints:Int, completion: (() -> Void)? = nil) {
 		
 		// Vibration et son pour signaler le knockback
 		CM_Audio.shared.playSound(.Error)
@@ -829,6 +882,7 @@ public class CM_Game_ViewController : CM_ViewController {
 				timeInterval: 1.5
 			)
 		]
+		viewController.completion = completion
 		viewController.present()
 	}
 	
