@@ -121,8 +121,7 @@ public class CM_Menu_ViewController : CM_ViewController {
 		
 		NotificationCenter.add(.updateAds) { [weak self] _ in
 			
-			let state = !(UserDefaults.get(.shouldDisplayAds) as? Bool ?? true)
-			adsStackView.isHidden = state
+			adsStackView.isHidden = !CM_Ads.shared.shouldDisplayAd
 		}
 		
 		return $0
@@ -191,7 +190,7 @@ public class CM_Menu_ViewController : CM_ViewController {
 		
 		CM_Alert_ViewController.presentLoading({ [weak self] alertController in
 			
-			CM_Ads.shared.presentInterstitial(Ads.FullScreen.Game.Start, nil, { [weak self] in
+			CM_Ads.shared.presentInterstitial(Ads.FullScreen.Game.Start, nil, {
 				
 				alertController?.close(completion)
 			})
