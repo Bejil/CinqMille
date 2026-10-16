@@ -43,6 +43,15 @@ public class CM_Dice : UIView {
 		fatalError("init(coder:) has not been implemented")
 	}
 	
+	/// Zone de touch élargie pour éviter de toucher le fond (relance) au lieu du dé
+	private let touchPadding:CGFloat = UI.Margins
+	
+	public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+		
+		let expandedBounds = bounds.insetBy(dx: -touchPadding, dy: -touchPadding)
+		return expandedBounds.contains(point)
+	}
+	
 	// MARK: - Setup
 	
 	private func setupUI() {

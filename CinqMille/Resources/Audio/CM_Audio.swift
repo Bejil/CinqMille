@@ -5,11 +5,12 @@
 //  Created by BLIN Michael on 09/10/2025.
 //
 
-import AVFoundation
+@preconcurrency import AVFoundation
 
-public class CM_Audio : NSObject {
+nonisolated
+public final class CM_Audio: NSObject, @unchecked Sendable {
 	
-	public enum Sounds : String, CaseIterable {
+	public enum Sounds: String, CaseIterable, Sendable {
 		
 		case Success = "Success"
 		case Error = "Error"
@@ -23,7 +24,7 @@ public class CM_Audio : NSObject {
 		case Dice6 = "Dice_6"
 	}
 	
-	public static var shared:CM_Audio = .init()
+	public static let shared:CM_Audio = .init()
 	
 	/// Cache des sons pré-chargés pour éviter les délais
 	private var soundCache:[Sounds: AVAudioPlayer] = [:]
@@ -36,31 +37,32 @@ public class CM_Audio : NSObject {
 	/// Queue dédiée pour les opérations audio (évite les freezes sur le main thread)
 	private let audioQueue = DispatchQueue(label: "com.cinqmille.audio", qos: .userInteractive)
 	
+	/// Proxy hors MainActor pour satisfaire AVAudioPlayerDelegate en Swift 6
+	private let playerDelegate = PlayerDelegateProxy()
+	
 	public var isSoundsEnabled:Bool {
 		
-		return (UserDefaults.get(.soundsEnabled) as? Bool) ?? true
+		(UserDefaults.get(.soundsEnabled) as? Bool) ?? true
 	}
+	
 	public var isMusicEnabled:Bool {
 		
-		return (UserDefaults.get(.musicEnabled) as? Bool) ?? true
+		(UserDefaults.get(.musicEnabled) as? Bool) ?? true
 	}
 	
 	public override init() {
 		
 		super.init()
 		
-		// Configurer l'AVAudioSession une seule fois
-		configureAudioSession()
+		playerDelegate.owner = self
 		
-		// Pré-charger tous les sons
+		configureAudioSession()
 		preloadSounds()
 	}
 	
-	/// Configure l'AVAudioSession une seule fois au démarrage
 	private func configureAudioSession() {
 		
 		do {
-			// .playback avec .mixWithOthers : permet de jouer les sons sans couper la musique externe
 			try AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
 			try AVAudioSession.sharedInstance().setActive(true, options: [.notifyOthersOnDeactivation])
 		}
@@ -69,22 +71,22 @@ public class CM_Audio : NSObject {
 		}
 	}
 	
-	/// Pré-charge tous les sons en mémoire pour éviter les délais
 	private func preloadSounds() {
 		
 		audioQueue.async { [weak self] in
 			
+			guard let self else { return }
+			
 			for sound in Sounds.allCases {
 				
-				if let path = Bundle.main.path(forResource: sound.rawValue, ofType: "mp3") {
+				guard let path = Bundle.main.path(forResource: sound.rawValue, ofType: "mp3") else { continue }
+				
+				let url = URL(fileURLWithPath: path)
+				
+				if let player = try? AVAudioPlayer(contentsOf: url) {
 					
-					let url = URL(fileURLWithPath: path)
-					
-					if let player = try? AVAudioPlayer(contentsOf: url) {
-						
-						player.prepareToPlay()
-						self?.soundCache[sound] = player
-					}
+					player.prepareToPlay()
+					self.soundCache[sound] = player
 				}
 			}
 		}
@@ -96,20 +98,16 @@ public class CM_Audio : NSObject {
 		
 		audioQueue.async { [weak self] in
 			
-			guard let self = self else { return }
+			guard let self else { return }
 			
-			// Créer un nouveau player à partir du cache (copie pour permettre plusieurs sons simultanés)
 			guard let cachedPlayer = self.soundCache[sound],
 				  let url = cachedPlayer.url,
 				  let player = try? AVAudioPlayer(contentsOf: url) else { return }
 			
-			player.delegate = self
+			player.delegate = self.playerDelegate
 			player.prepareToPlay()
 			
-			DispatchQueue.main.async {
-				self.activeSoundPlayers.append(player)
-			}
-			
+			self.activeSoundPlayers.append(player)
 			player.play()
 		}
 	}
@@ -120,18 +118,17 @@ public class CM_Audio : NSObject {
 		
 		guard isMusicEnabled else { return }
 		
-		if let index = (0...2).randomElement(), let path = Bundle.main.path(forResource: "music_\(index)", ofType: "mp3") {
-			
-			let url = URL(fileURLWithPath: path)
-			
-			if let player = try? AVAudioPlayer(contentsOf: url) {
-				
-				musicPlayer = player
-				musicPlayer?.delegate = self
-				musicPlayer?.prepareToPlay()
-				musicPlayer?.play()
-			}
-		}
+		guard let index = (0...2).randomElement(),
+			  let path = Bundle.main.path(forResource: "music_\(index)", ofType: "mp3") else { return }
+		
+		let url = URL(fileURLWithPath: path)
+		
+		guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
+		
+		musicPlayer = player
+		musicPlayer?.delegate = playerDelegate
+		musicPlayer?.prepareToPlay()
+		musicPlayer?.play()
 	}
 	
 	public func stopMusic() {
@@ -139,21 +136,26 @@ public class CM_Audio : NSObject {
 		musicPlayer?.stop()
 		musicPlayer = nil
 	}
-}
-
-extension CM_Audio : AVAudioPlayerDelegate {
 	
-	public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+	fileprivate func handlePlayerDidFinish(_ player: AVAudioPlayer) {
 		
-		// Si c'est la musique qui a fini, relancer une autre
-		if player == musicPlayer {
+		if player === musicPlayer {
 			playMusic()
 		}
 		else {
-			// Nettoyer les players de sons terminés
-			DispatchQueue.main.async { [weak self] in
-				self?.activeSoundPlayers.removeAll { $0 == player }
-			}
+			activeSoundPlayers.removeAll { $0 === player }
 		}
+	}
+}
+
+/// Delegate isolé du MainActor pour pouvoir être assigné depuis `audioQueue`.
+nonisolated
+private final class PlayerDelegateProxy: NSObject, AVAudioPlayerDelegate, @unchecked Sendable {
+	
+	weak var owner:CM_Audio?
+	
+	func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+		
+		owner?.handlePlayerDidFinish(player)
 	}
 }

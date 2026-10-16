@@ -9,7 +9,7 @@ import Foundation
 
 extension UserDefaults {
 
-	public enum Keys : String, CaseIterable {
+	public enum Keys : String, CaseIterable, Sendable {
 		
 		// Ads
 		case shouldDisplayAds = "shouldDisplayAds"
@@ -24,6 +24,7 @@ extension UserDefaults {
 		case vibrationsEnabled = "vibrationsEnabled"
 		case musicEnabled = "musicEnabled"
 		case soundsEnabled = "soundsEnabled"
+		case autoPassEnabled = "autoPassEnabled"
 		
 		// Rules - Objective
 		case rulesTargetScore = "rulesTargetScore"
@@ -58,27 +59,27 @@ extension UserDefaults {
 		case theme = "theme"
 	}
 	
-	public static func set(_ value:Any?, _ key:UserDefaults.Keys) {
+	nonisolated public static func set(_ value:Any?, _ key:UserDefaults.Keys) {
 		
 		let standardUserDefaults = UserDefaults.standard
 		standardUserDefaults.set(value, forKey: key.rawValue)
 		standardUserDefaults.synchronize()
 	}
 	
-	public static func get(_ key:UserDefaults.Keys) -> Any? {
+	nonisolated public static func get(_ key:UserDefaults.Keys) -> Any? {
 		
 		let standardUserDefaults = UserDefaults.standard
 		return standardUserDefaults.value(forKey: key.rawValue)
 	}
 	
-	public static func delete(_ key:UserDefaults.Keys) {
+	nonisolated public static func delete(_ key:UserDefaults.Keys) {
 		
 		let standardUserDefaults = UserDefaults.standard
 		standardUserDefaults.removeObject(forKey: key.rawValue)
 		standardUserDefaults.synchronize()
 	}
 	
-	public static func reset() {
+	nonisolated public static func reset() {
 		
 		Keys.allCases.forEach({ delete($0) })
 	}

@@ -39,6 +39,7 @@ public class CM_Game_ViewController : CM_ViewController {
 	private var isAIPlaying:Bool = false // Indique si l'IA est en train de jouer
 	private var aiTurnId:Int = 0 // Identifiant unique du tour IA pour annuler les appels asynchrones
 	private var rollId:Int = 0 // Identifiant unique du lancer pour annuler les callbacks si interrompu
+	private var isAutoPassing:Bool = false // Évite de déclencher plusieurs passes auto
 	
 	// MARK: - Dernier tour
 	
@@ -233,6 +234,9 @@ public class CM_Game_ViewController : CM_ViewController {
 		if !isCurrentPlayerHuman() {
 			// Mode "Passer" - simuler que l'IA a joué et passer au joueur suivant
 			skipAITurn()
+		} else if isStuckDueToExactScore() {
+			// Aucune sélection possible sans dépasser le score max : abandonner le tour
+			passTurnDueToExactScore()
 		} else {
 			// Mode "Valider" - valider le tour du joueur humain
 			validateTurn()
@@ -654,30 +658,7 @@ public class CM_Game_ViewController : CM_ViewController {
 		}
 		
 		// Vérifier si c'est un ballot (aucun dé scorant)
-		var isBallot = (score == 0)
-		
-		// Vérifier si la règle exactScore est activée et si tous les dés scorants feraient dépasser
-		if !isBallot && CM_Rules.shared.exactScore {
-			let currentPlayer = players[currentPlayerIndex]
-			var canSelectAnyDice = false
-			
-			// Vérifier chaque dé scorant individuellement
-			for diceIndex in scoringDiceIndices {
-				let dice = diceViews[diceIndex]
-				let hypotheticalScore = calculateHypotheticalScore(selectingDice: dice)
-				let potentialTotal = currentPlayer.score + hypotheticalScore
-				
-				if potentialTotal <= CM_Rules.shared.targetScore {
-					canSelectAnyDice = true
-					break
-				}
-			}
-			
-			// Si aucun dé ne peut être sélectionné sans dépasser, c'est un ballot forcé
-			if !canSelectAnyDice {
-				isBallot = true
-			}
-		}
+		let isBallot = (score == 0)
 		
 		if isBallot {
 			// Ballot - perd tous les points du tour
@@ -697,6 +678,7 @@ public class CM_Game_ViewController : CM_ViewController {
 			
 			// Mettre à jour l'affichage
 			updateRollHint()
+			updateValidateButton()
 			
 			// Afficher le tutoriel de sélection de dé si c'est le premier lancer et qu'il y a des dés scorants
 			if isCurrentPlayerHuman() && !scoringDiceIndices.isEmpty {
@@ -846,6 +828,7 @@ public class CM_Game_ViewController : CM_ViewController {
 	private func applyEqualityKnockback(for currentPlayer:CM_Player, newScore:Int, completion: (() -> Void)? = nil) -> Bool {
 		
 		var hasKnockback = false
+		let rules = CM_Rules.shared
 		
 		for player in players where player != currentPlayer {
 			
@@ -854,13 +837,20 @@ public class CM_Game_ViewController : CM_ViewController {
 				let lastScore = player.scores.removeLast()
 				hasKnockback = true
 				
+				// Si le joueur retombe à zéro, il doit à nouveau réaliser le score d'ouverture
+				if rules.openingRequired && player.score == 0 {
+					player.hasOpened = false
+				}
+				
 				// Afficher une notification de knockback
 				showKnockbackNotification(player: player, lostPoints: lastScore, completion: completion)
 			}
 		}
 		
-		// Si pas de knockback, appeler le completion immédiatement
-		if !hasKnockback {
+		if hasKnockback {
+			updatePlayersDisplay()
+		} else {
+			// Si pas de knockback, appeler le completion immédiatement
 			completion?()
 		}
 		
@@ -873,12 +863,24 @@ public class CM_Game_ViewController : CM_ViewController {
 		CM_Audio.shared.playSound(.Error)
 		CM_Feedback.shared.make(.On)
 		
-		// Animation visuelle sur le joueur affecté pourrait être ajoutée ici
+		let mustReopen = CM_Rules.shared.openingRequired && !player.hasOpened
+		let subtitle: String
+		
+		if mustReopen {
+			subtitle = player == players[currentPlayerIndex]
+				? String(key: "game.equality.tutorial.subtitle.currentPlayer.reopen")
+				: (player.name ?? "") + " " + String(key: "game.equality.tutorial.subtitle.player.reopen")
+		} else {
+			subtitle = player == players[currentPlayerIndex]
+				? String(key: "game.equality.tutorial.subtitle.currentPlayer")
+				: (player.name ?? "") + " " + String(key: "game.equality.tutorial.subtitle.player")
+		}
+		
 		let viewController:CM_Tutorial_ViewController = .init()
 		viewController.items = [
 			CM_Tutorial_ViewController.Item(
 				title: String(key: "game.equality.tutorial.title"),
-				subtitle: player == players[currentPlayerIndex] ? String(key: "game.equality.tutorial.subtitle.currentPlayer") : player.name ?? "" + " " + String(key: "game.equality.tutorial.subtitle.player"),
+				subtitle: subtitle,
 				timeInterval: 1.5
 			)
 		]
@@ -927,6 +929,7 @@ public class CM_Game_ViewController : CM_ViewController {
 		// Afficher l'alerte de victoire
 		let alert = CM_Alert_ViewController()
 		alert.title = String(key: "game.victory.title")
+        alert.backgroundView.isUserInteractionEnabled = false
 		alert.add(winner == CM_Player.current ? String(key: "game.victory.content.currentPlayer") : String(format: String(key: "game.victory.content"), winner.name ?? "?"))
 		alert.addButton(title: String(key: "game.victory.button")) { [weak self] _ in
 			
@@ -1032,15 +1035,109 @@ public class CM_Game_ViewController : CM_ViewController {
 		return rules.exactScore && potentialScore > rules.targetScore
 	}
 	
+	private var isAutoPassEnabled:Bool {
+		(UserDefaults.get(.autoPassEnabled) as? Bool) ?? false
+	}
+	
 	func updateValidateButton() {
 		
+		let title:String
+		let type:CM_Button.ButtonType
+		let enabled:Bool
+		
 		if isCurrentPlayerHuman() {
-			// Tour du joueur humain - bouton "Valider"
-			validateButton.isEnabled = canValidate()
+			if isStuckDueToExactScore() {
+				// Aucun coup possible sans dépasser : permettre de passer
+				title = String(key: "game.skip")
+				type = .tertiary
+				enabled = true
+				scheduleAutoPassIfNeeded()
+			} else {
+				title = String(key: "game.validate")
+				type = .secondary
+				enabled = canValidate()
+			}
 		} else {
 			// Tour de l'IA - bouton "Passer" toujours actif
-			validateButton.isEnabled = true
+			title = String(key: "game.skip")
+			type = .tertiary
+			enabled = true
 		}
+		
+		// Éviter de réappliquer le même état (sinon le bouton clignote pendant le tour des adversaires)
+		if validateButton.title != title {
+			validateButton.title = title
+		}
+		if validateButton.type != type {
+			validateButton.type = type
+		}
+		if validateButton.isEnabled != enabled {
+			validateButton.isEnabled = enabled
+		}
+	}
+	
+	/// Passe automatiquement le tour si l'option est activée et qu'aucun coup n'est possible
+	private func scheduleAutoPassIfNeeded() {
+		
+		guard isAutoPassEnabled else { return }
+		guard isStuckDueToExactScore() else { return }
+		guard !isAutoPassing else { return }
+		
+		isAutoPassing = true
+		
+		DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+			guard let self = self else { return }
+			self.isAutoPassing = false
+			guard self.isAutoPassEnabled, self.isStuckDueToExactScore() else { return }
+			self.passTurnDueToExactScore()
+		}
+	}
+	
+	/// Bloqué car tous les coups scorants feraient dépasser l'objectif (règle score exact)
+	private func isStuckDueToExactScore() -> Bool {
+		
+		let rules = CM_Rules.shared
+		guard rules.exactScore else { return false }
+		guard hasRolledThisTurn else { return false }
+		guard isCurrentPlayerHuman() else { return false }
+		if canValidate() { return false }
+		
+		let unlockedScoring = scoringDiceIndices.filter { !diceViews[$0].isLocked }
+		guard !unlockedScoring.isEmpty else { return false }
+		
+		let player = players[currentPlayerIndex]
+		let availableDice = unlockedScoring.map { diceViews[$0] }
+		let count = availableDice.count
+		let baselineScore = calculateHypotheticalScore(selectingAdditionalDice: [])
+		
+		// Tester toutes les combinaisons possibles de dés scorants
+		for mask in 1..<(1 << count) {
+			
+			var subset:[CM_Dice] = []
+			for index in 0..<count where mask & (1 << index) != 0 {
+				subset.append(availableDice[index])
+			}
+			
+			let hypotheticalScore = calculateHypotheticalScore(selectingAdditionalDice: subset)
+			if player.score + hypotheticalScore <= rules.targetScore && hypotheticalScore > baselineScore {
+				return false
+			}
+		}
+		
+		return true
+	}
+	
+	/// Abandonne le tour lorsqu'aucun coup n'est possible sans dépasser le score max
+	private func passTurnDueToExactScore() {
+		
+		guard isStuckDueToExactScore() else { return }
+		
+		CM_Audio.shared.playSound(.Tap)
+		CM_Feedback.shared.make(.On)
+		
+		turnScore = 0
+		turnScoreLabel.text = "0"
+		endTurn()
 	}
 	
 	private func endTurn() {
@@ -1086,7 +1183,6 @@ public class CM_Game_ViewController : CM_ViewController {
 		// Passer au joueur suivant
 		currentPlayerIndex = (currentPlayerIndex + 1) % players.count
 		updatePlayersDisplay()
-		updateValidateButton()
 		updateUIForCurrentPlayer()
 		updateRollHint()
 		
@@ -1109,6 +1205,12 @@ public class CM_Game_ViewController : CM_ViewController {
 		aiTurnId += 1
 		let currentTurnId = aiTurnId
 		
+		// Passer auto : simuler l'appui sur "Passer" au lieu de jouer l'IA avec animations
+		if isAutoPassEnabled {
+			scheduleAutoSkipAI(turnId: currentTurnId)
+			return
+		}
+		
 		isAIPlaying = true
 		
 		// Délai avant le premier lancer de l'IA
@@ -1116,6 +1218,30 @@ public class CM_Game_ViewController : CM_ViewController {
 			guard let self = self else { return }
 			guard self.isAIPlaying && self.aiTurnId == currentTurnId else { return }
 			self.aiRollDice(turnId: currentTurnId)
+		}
+	}
+	
+	/// Simule automatiquement l'appui sur "Passer" pour le tour d'un adversaire
+	private func scheduleAutoSkipAI(turnId:Int) {
+		
+		guard !isAutoPassing else { return }
+		
+		isAutoPassing = true
+		isAIPlaying = true
+		
+		DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+			guard let self = self else { return }
+			self.isAutoPassing = false
+			guard self.aiTurnId == turnId else { return }
+			guard self.isAutoPassEnabled, !self.isCurrentPlayerHuman() else {
+				// L'option a été désactivée pendant l'attente : jouer l'IA normalement
+				if !self.isCurrentPlayerHuman() {
+					self.isAIPlaying = true
+					self.aiRollDice(turnId: turnId)
+				}
+				return
+			}
+			self.skipAITurn()
 		}
 	}
 	
@@ -1755,21 +1881,8 @@ public class CM_Game_ViewController : CM_ViewController {
 	
 	func updateUIForCurrentPlayer() {
 		
-		let isHumanTurn = isCurrentPlayerHuman()
-		
-		if isHumanTurn {
-			// Tour du joueur humain
-			validateButton.title = String(key: "game.validate")
-			validateButton.type = .secondary
-			validateButton.isEnabled = canValidate()
-			diceContainerView.isUserInteractionEnabled = true
-		} else {
-			// Tour de l'IA - afficher le bouton "Passer"
-			validateButton.title = String(key: "game.skip")
-			validateButton.type = .tertiary
-			validateButton.isEnabled = true
-			diceContainerView.isUserInteractionEnabled = false
-		}
+		diceContainerView.isUserInteractionEnabled = isCurrentPlayerHuman()
+		updateValidateButton()
 	}
 	
 	func setupDice() {
@@ -1832,6 +1945,7 @@ public class CM_Game_ViewController : CM_ViewController {
 				
 				if potentialTotal > CM_Rules.shared.targetScore {
 					showDiceSelectionError(dice)
+					deselectCurrentRollDice()
 					showExceedScoreTutorial()
 					return
 				}
@@ -2062,7 +2176,12 @@ public class CM_Game_ViewController : CM_ViewController {
 	/// Calcule le score hypothétique si on sélectionnait un dé supplémentaire
 	private func calculateHypotheticalScore(selectingDice:CM_Dice) -> Int {
 		
-		// Simuler la sélection du dé
+		return calculateHypotheticalScore(selectingAdditionalDice: [selectingDice])
+	}
+	
+	/// Calcule le score hypothétique si on sélectionnait des dés supplémentaires
+	private func calculateHypotheticalScore(selectingAdditionalDice additionalDice:[CM_Dice]) -> Int {
+		
 		var diceByRoll:[Int:[Int]] = [:]
 		
 		// Ajouter les dés déjà verrouillés
@@ -2072,10 +2191,11 @@ public class CM_Game_ViewController : CM_ViewController {
 			}
 		}
 		
-		// Ajouter le dé qu'on veut sélectionner
-		diceByRoll[currentRollNumber, default: []].append(selectingDice.value)
+		// Ajouter les dés qu'on veut sélectionner
+		for dice in additionalDice {
+			diceByRoll[currentRollNumber, default: []].append(dice.value)
+		}
 		
-		// Calculer le score pour chaque groupe
 		var hypotheticalScore = 0
 		
 		for (_, values) in diceByRoll {
@@ -2083,7 +2203,6 @@ public class CM_Game_ViewController : CM_ViewController {
 			hypotheticalScore += result.score
 		}
 		
-		// Ajouter le score accumulé des "bravo" précédents
 		return accumulatedScore + hypotheticalScore
 	}
 	
@@ -2102,6 +2221,22 @@ public class CM_Game_ViewController : CM_ViewController {
 	
 	/// Flag pour éviter d'afficher le tutoriel de dépassement plusieurs fois
 	private var exceedScoreTutorialShown:Bool = false
+	
+	/// Désélectionne les dés verrouillés lors du lancer actuel
+	private func deselectCurrentRollDice() {
+		
+		let diceToDeselect = diceViews.filter { $0.isLocked && $0.lockedAtRoll == currentRollNumber }
+		guard !diceToDeselect.isEmpty else { return }
+		
+		for dice in diceToDeselect {
+			dice.isLocked = false
+			dice.lockedAtRoll = nil
+			moveDiceToCorrectStackView(dice)
+		}
+		
+		updateSelectedDiceScore()
+		updateRollHint()
+	}
 	
 	/// Affiche un tutoriel expliquant que le dé ferait dépasser le score maximum
 	private func showExceedScoreTutorial() {

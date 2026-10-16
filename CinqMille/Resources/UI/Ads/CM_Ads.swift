@@ -41,9 +41,26 @@ public class CM_Ads : NSObject {
 			
 			AppOpenAd.load(with: Ads.FullScreen.AppOpening, request: Request()) { [weak self] ad, error in
 				
-				self?.appOpening = ad
-				self?.appOpening?.fullScreenContentDelegate = self
-				self?.appOpening?.present(from: UI.MainController)
+				guard let self else {
+					
+					Task { @MainActor in
+						dismissCompletion?()
+					}
+					return
+				}
+				
+				Task { @MainActor in
+					
+					guard let ad else {
+						
+						dismissCompletion?()
+						return
+					}
+					
+					self.appOpening = ad
+					self.appOpening?.fullScreenContentDelegate = self
+					self.appOpening?.present(from: UI.MainController)
+				}
 			}
 		}
 		else {
@@ -61,14 +78,24 @@ public class CM_Ads : NSObject {
 			
 			InterstitialAd.load(with:identifier, request: Request(), completionHandler: { [weak self] ad, _ in
 				
-				if let ad {
+				guard let self else {
+					
+					Task { @MainActor in
+						dismissCompletion?()
+					}
+					return
+				}
+				
+				Task { @MainActor in
+					
+					guard let ad else {
+						
+						dismissCompletion?()
+						return
+					}
 					
 					ad.fullScreenContentDelegate = self
 					ad.present(from: UI.MainController)
-				}
-				else {
-					
-					dismissCompletion?()
 				}
 			})
 		}
@@ -120,53 +147,68 @@ public class CM_Ads : NSObject {
 
 extension CM_Ads : FullScreenContentDelegate {
 	
-	public func adWillPresentFullScreenContent(_ ad: any FullScreenPresentingAd) {
+	nonisolated public func adWillPresentFullScreenContent(_ ad: any FullScreenPresentingAd) {
 		
-		if ad is InterstitialAd {
+		Task { @MainActor in
 			
-			interstitialPresentCompletion?()
-			interstitialPresentCompletion = nil
+			if ad is InterstitialAd {
+				
+				self.interstitialPresentCompletion?()
+				self.interstitialPresentCompletion = nil
+			}
 		}
 	}
 	
-	public func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
+	nonisolated public func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
 		
-		appOpening = nil
-		
-		if rewardedAd != nil && rewardedAdCompletion != nil && ad is RewardedAd {
+		Task { @MainActor in
 			
-			rewardedAdCompletion?(true,nil)
+			self.appOpening = nil
 			
-			rewardedAd = nil
-			rewardedAdCompletion = nil
-			rewardedAdReward = nil
-		}
-		else if ad is InterstitialAd {
-			
-			interstitialDismissCompletion?()
-			interstitialDismissCompletion = nil
-		}
-		else if ad is AppOpenAd {
-			
-			appOpeningDismissCompletion?()
-			appOpeningDismissCompletion = nil
+			if self.rewardedAd != nil && self.rewardedAdCompletion != nil && ad is RewardedAd {
+				
+				self.rewardedAdCompletion?(true,nil)
+				
+				self.rewardedAd = nil
+				self.rewardedAdCompletion = nil
+				self.rewardedAdReward = nil
+			}
+			else if ad is InterstitialAd {
+				
+				self.interstitialDismissCompletion?()
+				self.interstitialDismissCompletion = nil
+			}
+			else if ad is AppOpenAd {
+				
+				self.appOpeningDismissCompletion?()
+				self.appOpeningDismissCompletion = nil
+			}
 		}
 	}
 	
-	public func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
+	nonisolated public func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
 		
-		if ad is InterstitialAd {
+		Task { @MainActor in
 			
-			interstitialDismissCompletion?()
-			interstitialDismissCompletion = nil
-		}
-		else if rewardedAd != nil && rewardedAdCompletion != nil && ad is RewardedAd {
-			
-			rewardedAdCompletion?(false,nil)
-			
-			rewardedAd = nil
-			rewardedAdCompletion = nil
-			rewardedAdReward = nil
+			if ad is InterstitialAd {
+				
+				self.interstitialDismissCompletion?()
+				self.interstitialDismissCompletion = nil
+			}
+			else if self.rewardedAd != nil && self.rewardedAdCompletion != nil && ad is RewardedAd {
+				
+				self.rewardedAdCompletion?(false,nil)
+				
+				self.rewardedAd = nil
+				self.rewardedAdCompletion = nil
+				self.rewardedAdReward = nil
+			}
+			else if ad is AppOpenAd {
+				
+				self.appOpening = nil
+				self.appOpeningDismissCompletion?()
+				self.appOpeningDismissCompletion = nil
+			}
 		}
 	}
 }
@@ -174,13 +216,16 @@ extension CM_Ads : FullScreenContentDelegate {
 
 extension CM_Ads : BannerViewDelegate {
 	
-	public func bannerView(_ bannerView: BannerView, didFailToReceiveAdWithError error: Error) {
+	nonisolated public func bannerView(_ bannerView: BannerView, didFailToReceiveAdWithError error: Error) {
 		
-		UIView.animation {
+		Task { @MainActor in
 			
-			bannerView.isHidden = true
-			bannerView.alpha = bannerView.isHidden ? 0.0 : 1.0
-			bannerView.superview?.layoutIfNeeded()
+			UIView.animation {
+				
+				bannerView.isHidden = true
+				bannerView.alpha = bannerView.isHidden ? 0.0 : 1.0
+				bannerView.superview?.layoutIfNeeded()
+			}
 		}
 	}
 }

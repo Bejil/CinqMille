@@ -188,7 +188,7 @@ public class CM_Menu_ViewController : CM_ViewController {
 	
 	private func presentGameStartAd(_ completion:(()->Void)?) {
 		
-		CM_Alert_ViewController.presentLoading({ [weak self] alertController in
+		CM_Alert_ViewController.presentLoading({ alertController in
 			
 			CM_Ads.shared.presentInterstitial(Ads.FullScreen.Game.Start, nil, {
 				

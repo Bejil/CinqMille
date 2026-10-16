@@ -26,7 +26,7 @@
 //MARK: - New game
 "newGame.alert.title" = "Nouvelle partie";
 "newGame.alert.solo" = "Solo";
-"newGame.alert.dices" = "Multijoueur";
+"newGame.alert.dices" = "Multijoueurs local";
 
 //MARK: - Stats
 "stats.alert.title" = "Statistiques";
@@ -54,6 +54,10 @@
 "settings.button.vibrations.description" = "Retour haptique lors des interactions";
 "settings.button.vibrations.on" = "Activées";
 "settings.button.vibrations.off" = "Désactivées";
+"settings.button.autoPass" = "Passer auto";
+"settings.button.autoPass.description" = "Passe automatiquement le tour des adversaires et si aucun coup n'est possible sans dépasser le score max";
+"settings.button.autoPass.on" = "Activé";
+"settings.button.autoPass.off" = "Désactivé";
 
 //MARK: - Settings
 "settings.title" = "Réglages";
@@ -103,7 +107,7 @@
 "settings.rules.special.full" = "Full";
 "settings.rules.special.full.description" = "Activer la combinaison brelan + paire";
 "settings.rules.special.equality" = "Égalité";
-"settings.rules.special.equality.description" = "Si égalité, l'adversaire retombe à son score précédent";
+"settings.rules.special.equality.description" = "Si égalité, l'adversaire retombe à son score précédent (et doit rouvrir s'il revient à zéro)";
 "settings.rules.penalties.title" = "Pénalités";
 "settings.rules.penalties.threeBallots" = "Pénalité 3 ballots";
 "settings.rules.penalties.threeBallots.description" = "3 tours sans points consécutifs = retour à zéro";
@@ -139,7 +143,7 @@
 "rules.last1000.title" = "Derniers 1000 points";
 "rules.last1000.content" = "Les 1000 derniers points doivent être réalisés en un seul tour pour remporter la partie.";
 "rules.tie.title" = "Égalité";
-"rules.tie.content" = "Si vous arrivez au même score qu'un adversaire, celui-ci retombe à son score du tour précédent. Une seule personne peut occuper chaque palier de points !";
+"rules.tie.content" = "Si vous arrivez au même score qu'un adversaire, celui-ci retombe à son score du tour précédent. Une seule personne peut occuper chaque palier de points ! S'il retombe à zéro, il devra à nouveau réaliser le score d'ouverture pour rentrer dans la partie.";
 "rules.penalties.title" = "Pénalités";
 "rules.penalties.threeBallots" = "• 3 tours sans points consécutifs = retour à zéro";
 "rules.penalties.multipleOf100" = "• Points validés uniquement si multiple de 100";
@@ -176,6 +180,8 @@
 "game.close.alert.button" = "Quitter";
 "game.equality.tutorial.title" = "Égalité";
 "game.equality.tutorial.subtitle.currentPlayer" = "Vous revenez à votre précédent score";
+"game.equality.tutorial.subtitle.currentPlayer.reopen" = "Vous revenez à zéro.\nRéalisez à nouveau le score d'ouverture pour rentrer dans la partie.";
+"game.equality.tutorial.subtitle.player.reopen" = "revient à zéro et doit rouvrir";
 "game.lastRound.title" = "Dernier tour !";
 "game.lastRound.subtitle" = "Un joueur a atteint l'objectif !\nLes autres ont un dernier tour pour tenter de l'égaler.";
 
@@ -209,7 +215,7 @@
 "dices.turn.title" = "À votre tour !";
 "game.equality.tutorial.subtitle.player" = "revient à son précédent score";
 "game.exceedScore.tutorial.title" = "Score maximum";
-"game.exceedScore.tutorial.subtitle" = "Ce dé vous ferait dépasser l'objectif.\nChoisissez un autre dé ou validez votre tour.";
+"game.exceedScore.tutorial.subtitle" = "Cette combinaison vous ferait dépasser l'objectif.\nLes dés ont été désélectionnés.";
 
 //MARK: - Combinations
 "game.combination.subtitle" = "Combinaison !";

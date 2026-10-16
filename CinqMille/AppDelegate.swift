@@ -16,66 +16,70 @@ public class AppDelegate: UIResponder, UIApplicationDelegate {
 	public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
 		
 		CM_Ads.shared.start()
-		
-		window = UIWindow(frame: UIScreen.main.bounds)
-		window?.backgroundColor = Colors.Background.Application
-		
-		let splashscreenViewController:CM_Splashscreen_ViewController = .init()
-		splashscreenViewController.completion = { [weak self] in
-			
-			let navigationController:CM_NavigationController = .init(rootViewController: CM_Menu_ViewController())
-			navigationController.navigationBar.prefersLargeTitles = false
-			self?.window?.rootViewController = navigationController
-			
-			let parameters = RequestParameters()
-			parameters.isTaggedForUnderAgeOfConsent = false
-			
-			ConsentInformation.shared.requestConsentInfoUpdate(with: parameters) { [weak self] _ in
-				
-				ConsentForm.load { [weak self] form, _ in
-					
-					if ConsentInformation.shared.consentStatus == .required {
-						
-						form?.present(from: UI.MainController)
-					}
-					else if ConsentInformation.shared.consentStatus == .obtained {
-						
-						self?.afterLaunch()
-						NotificationCenter.post(.updateAds)
-					}
-				}
-			}
-		}
-		window?.rootViewController = splashscreenViewController
-		
-		window?.makeKeyAndVisible()
-		
 		CM_Audio.shared.playMusic()
 		
 		return true
 	}
 	
-	public func applicationWillEnterForeground(_ application: UIApplication) {
+	public func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
 		
-		afterLaunch()
+		let configuration = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+		configuration.delegateClass = SceneDelegate.self
+		return configuration
 	}
 	
-	private func presentAdAppOpening() {
+	func startConsentFlow() {
 		
-		CM_Ads.shared.presentAppOpening {
+		let parameters = RequestParameters()
+		parameters.isTaggedForUnderAgeOfConsent = false
+		
+		ConsentInformation.shared.requestConsentInfoUpdate(with: parameters) { [weak self] _ in
 			
-			let currentPlayer:CM_Player = .current
-			if currentPlayer.name == nil {
+			ConsentForm.load { [weak self] form, _ in
 				
-				let alertController:CM_Player_Name_Alert_ViewController = .init()
-				alertController.backgroundView.isUserInteractionEnabled = false
-				alertController.present()
+				if ConsentInformation.shared.consentStatus == .required, let form = form {
+					
+					form.present(from: UI.MainController) { [weak self] _ in
+						
+						self?.afterConsentFlow()
+					}
+				}
+				else {
+					
+					self?.afterConsentFlow()
+				}
 			}
 		}
 	}
 	
-	private func afterLaunch() {
+	/// Après le consentement : pub d'ouverture si obtenu, puis demande du nom si besoin
+	func afterConsentFlow() {
 		
-		presentAdAppOpening()
+		if ConsentInformation.shared.consentStatus == .obtained {
+			
+			NotificationCenter.post(.updateAds)
+			presentAdAppOpening()
+		}
+		else {
+			
+			askPlayerNameIfNeeded()
+		}
+	}
+	
+	private func presentAdAppOpening() {
+		
+		CM_Ads.shared.presentAppOpening { [weak self] in
+			
+			self?.askPlayerNameIfNeeded()
+		}
+	}
+	
+	private func askPlayerNameIfNeeded() {
+		
+		guard CM_Player.current.name == nil else { return }
+		
+		let alertController:CM_Player_Name_Alert_ViewController = .init()
+		alertController.backgroundView.isUserInteractionEnabled = false
+		alertController.present()
 	}
 }
