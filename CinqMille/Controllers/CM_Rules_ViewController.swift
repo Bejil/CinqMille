@@ -10,7 +10,18 @@ import SnapKit
 
 public class CM_Rules_ViewController : CM_ViewController {
 	
-	private let rules = CM_Rules.shared
+	/// Snapshot affiché (règles locales ou règles d'une partie réseau).
+	private let rules:CM_Rules_Snapshot
+	
+	public init(snapshot:CM_Rules_Snapshot? = nil) {
+		
+		self.rules = snapshot ?? CM_Rules_Snapshot.fromCurrentRules()
+		super.init(nibName: nil, bundle: nil)
+	}
+	
+	@MainActor required public init?(coder: NSCoder) {
+		fatalError("init(coder:) has not been implemented")
+	}
 	
 	private lazy var stackView:UIStackView = {
 		

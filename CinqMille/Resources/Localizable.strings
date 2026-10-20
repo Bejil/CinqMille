@@ -27,6 +27,52 @@
 "newGame.alert.title" = "Nouvelle partie";
 "newGame.alert.solo" = "Solo";
 "newGame.alert.dices" = "Multijoueurs local";
+"newGame.alert.network" = "Multijoueur en ligne";
+
+//MARK: - Network multiplayer
+"network.lobby.title" = "Partie en ligne";
+"network.lobby.home.subtitle" = "Créez une partie, rejoignez-en une avec un code ou un QR, ou rejoignez automatiquement une partie en attente.";
+"network.lobby.create" = "Créer une partie";
+"network.lobby.join" = "Rejoindre avec un code";
+"network.lobby.joinWaiting" = "Rejoindre une partie";
+"network.lobby.joinWaiting.empty" = "Aucune partie en attente pour le moment.";
+"network.lobby.join.choice.title" = "Rejoindre une partie";
+"network.lobby.join.choice.content" = "Entrez le code à la main ou scannez le QR code de l'hôte.";
+"network.lobby.join.choice.manual" = "Saisir le code";
+"network.lobby.join.choice.scan" = "Scanner un QR code";
+"network.lobby.join.title" = "Code de la partie";
+"network.lobby.join.content" = "Entrez le code à 6 caractères partagé par l'hôte.";
+"network.lobby.join.placeholder" = "ABC123";
+"network.lobby.join.confirm" = "Rejoindre";
+"network.lobby.code.title" = "Code de la partie";
+"network.lobby.qr.hint" = "Faites scanner ce QR code pour rejoindre";
+"network.lobby.scan.title" = "Scanner le QR code";
+"network.lobby.scan.hint" = "Placez le QR code de la partie dans le cadre";
+"network.lobby.scan.cameraDenied" = "L'accès à la caméra est nécessaire pour scanner un QR code.";
+"network.lobby.scan.invalid" = "QR code invalide. Scannez le code d'une partie Cinq Mille.";
+"network.lobby.start" = "Démarrer la partie";
+"network.lobby.rules" = "Règles de la partie";
+"rules.button" = "Règles";
+"network.lobby.leave" = "Quitter";
+"network.lobby.started" = "La partie démarre…";
+"network.lobby.rules.missing" = "Les règles de cette partie ne sont pas encore disponibles.";
+"rules.title.network" = "Règles de la partie";
+"network.lobby.cancelled.title" = "Partie annulée";
+"network.lobby.cancelled.content" = "L'hôte a quitté. La partie a été annulée.";
+"network.game.title" = "Partie en ligne";
+"network.game.waiting" = "En attente…";
+"network.game.playerLeft.title" = "Joueur parti";
+"network.game.playerLeft.content" = "%@ a quitté la partie.";
+"network.error.firebaseNotConfigured" = "Firebase n'est pas configuré. Ajoutez GoogleService-Info.plist.";
+"network.error.gameMissing" = "État de partie introuvable.";
+"network.error.notAuthenticated" = "Connexion Firebase impossible.";
+"network.error.roomNotFound" = "Aucune partie trouvée avec ce code.";
+"network.error.roomFull" = "Cette partie est pleine.";
+"network.error.roomAlreadyStarted" = "La partie a déjà commencé.";
+"network.error.invalidCode" = "Le code doit contenir 6 caractères.";
+"network.error.hostOnly" = "Seul l'hôte peut démarrer la partie.";
+"network.error.notReady" = "Il faut au moins 2 joueurs pour démarrer.";
+"network.error.codeGeneration" = "Impossible de générer un code unique.";
 
 //MARK: - Stats
 "stats.alert.title" = "Statistiques";
@@ -175,6 +221,8 @@
 "game.victory.content.currentPlayer" = "Vous remportez la partie !";
 "game.victory.content" = "%@ remporte la partie !";
 "game.victory.button" = "Retour au menu";
+"game.defeat.title" = "Défaite";
+"game.defeat.content" = "%@ remporte la partie.";
 "game.close.alert.title" = "Attention";
 "game.close.alert.content" = "Souhaitez-vous réellement quitter la partie ?";
 "game.close.alert.button" = "Quitter";

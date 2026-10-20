@@ -11,6 +11,8 @@
 		D4831BF22F0FF9F9001F2C68 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = D4831BF12F0FF9F9001F2C68 /* GoogleMobileAds */; };
 		D4831BFE2F1000B2001F2C68 /* GoogleUserMessagingPlatform in Frameworks */ = {isa = PBXBuildFile; productRef = D4831BFD2F1000B2001F2C68 /* GoogleUserMessagingPlatform */; };
 		D4CA70412F0D671D0071E083 /* SPConfetti in Frameworks */ = {isa = PBXBuildFile; productRef = D4CA70402F0D671D0071E083 /* SPConfetti */; };
+		D4FB00132F1A20010058B376 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = D4FB00112F1A20010058B376 /* FirebaseAuth */; };
+		D4FB00142F1A20010058B376 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = D4FB00122F1A20010058B376 /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +49,8 @@
 				D40C7FD62F0702B60058B376 /* SnapKit in Frameworks */,
 				D4831BFE2F1000B2001F2C68 /* GoogleUserMessagingPlatform in Frameworks */,
 				D4CA70412F0D671D0071E083 /* SPConfetti in Frameworks */,
+				D4FB00132F1A20010058B376 /* FirebaseAuth in Frameworks */,
+				D4FB00142F1A20010058B376 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -93,6 +97,8 @@
 				D4CA70402F0D671D0071E083 /* SPConfetti */,
 				D4831BF12F0FF9F9001F2C68 /* GoogleMobileAds */,
 				D4831BFD2F1000B2001F2C68 /* GoogleUserMessagingPlatform */,
+				D4FB00112F1A20010058B376 /* FirebaseAuth */,
+				D4FB00122F1A20010058B376 /* FirebaseFirestore */,
 			);
 			productName = Rollrisk;
 			productReference = D40C7F9F2F0701570058B376 /* CinqMille.app */;
@@ -127,6 +133,7 @@
 				D4CA703F2F0D671D0071E083 /* XCRemoteSwiftPackageReference "SPConfetti" */,
 				D4831BF02F0FF9F9001F2C68 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 				D4831BFC2F1000B2001F2C68 /* XCRemoteSwiftPackageReference "swift-package-manager-google-user-messaging-platform" */,
+				D4FB00102F1A20010058B376 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D40C7FA02F0701570058B376 /* Products */;
@@ -408,6 +415,14 @@
 				minimumVersion = 1.4.2;
 			};
 		};
+		D4FB00102F1A20010058B376 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -430,6 +445,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D4CA703F2F0D671D0071E083 /* XCRemoteSwiftPackageReference "SPConfetti" */;
 			productName = SPConfetti;
+		};
+		D4FB00112F1A20010058B376 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D4FB00102F1A20010058B376 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		D4FB00122F1A20010058B376 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D4FB00102F1A20010058B376 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

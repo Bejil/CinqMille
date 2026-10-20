@@ -17,12 +17,37 @@ public class CM_Game_ViewController : CM_ViewController {
 	/// Si true, tous les joueurs sont humains (pas d'IA)
 	var isLocalMultiplayer: Bool = false
 	
-	/// Retourne true si le joueur actuel est un humain
+	/// Mode multijoueur réseau (Firebase)
+	var isNetworkMultiplayer: Bool = false
+	var networkRoomId: String?
+	var networkUserId: String?
+	var networkPlayerIds: [String] = []
+	private var networkRevision: Int = 0
+	private var networkEventId: Int = 0
+	private var isApplyingRemoteState: Bool = false
+	private var isPushingNetworkState: Bool = false
+	private var pendingNetworkPush:(winnerId:String?, force:Bool, eventType:String?, eventMessage:String?)?
+	private var networkPendingEventType:String?
+	private var networkPendingEventMessage:String?
+	private var pendingNetworkWinnerId:String?
+	
+	/// Retourne true si le joueur actuel est un humain (localement contrôlable)
 	func isCurrentPlayerHuman() -> Bool {
+		if isNetworkMultiplayer {
+			return isMyNetworkTurn()
+		}
 		if isLocalMultiplayer {
 			return true // En mode multijoueur local, tous les joueurs sont humains
 		}
 		return currentPlayerIndex == 0 // En mode solo, seul le premier joueur est humain
+	}
+	
+	func isMyNetworkTurn() -> Bool {
+		
+		guard isNetworkMultiplayer,
+			  let userId = networkUserId,
+			  currentPlayerIndex < networkPlayerIds.count else { return false }
+		return networkPlayerIds[currentPlayerIndex] == userId
 	}
 	
 	// MARK: - Propriétés de jeu
@@ -50,7 +75,7 @@ public class CM_Game_ViewController : CM_ViewController {
 	/// Ensemble des joueurs qui ont déjà joué leur dernier tour
 	private var playersWhoPlayedLastRound:Set<Int> = []
 	/// Flag pour empêcher les appels multiples à handleVictory
-	private var victoryHandled:Bool = false
+	private(set) var victoryHandled:Bool = false
 	lazy var stackView:UIStackView = {
 		
 		$0.alpha = 0.0
@@ -493,14 +518,21 @@ public class CM_Game_ViewController : CM_ViewController {
 			
 			alertController.close { [weak self] in
 				
-				if !(self?.isLocalMultiplayer ?? true) {
+				guard let self else { return }
+				
+				if self.isNetworkMultiplayer {
+					self.leaveNetworkGameAndDismiss()
+					return
+				}
+				
+				if !self.isLocalMultiplayer {
 					
 					let currentPlayer = CM_Player.current
 					currentPlayer.stats.abandonments += 1
 					currentPlayer.save()
 				}
 				
-				self?.dismiss()
+				self.dismiss()
 			}
 		}
 		button.type = .delete
@@ -508,11 +540,72 @@ public class CM_Game_ViewController : CM_ViewController {
 		alertController.present()
 	}
 	
+	func leaveNetworkGameAndDismiss() {
+		
+		guard let roomId = networkRoomId else {
+			dismissPresentedNetworkFlow()
+			return
+		}
+		
+		var name = CM_Player.current.name ?? "?"
+		if let userId = networkUserId,
+		   let index = networkPlayerIds.firstIndex(of: userId),
+		   index < players.count {
+			name = players[index].name ?? name
+		}
+		
+		// Couper le listener avant la suppression pour éviter l'alerte "partie introuvable"
+		CM_Multiplayer_Service.shared.stopListening(roomId: roomId)
+		
+		Task { [weak self] in
+			
+			_ = try? await CM_Multiplayer_Service.shared.leaveNetworkGame(roomId: roomId, playerName: name)
+			
+			await MainActor.run {
+				self?.dismissPresentedNetworkFlow()
+			}
+		}
+	}
+	
+	/// Ferme le flux modal (NavigationController présenté), pas seulement le VC enfant.
+	func dismissPresentedNetworkFlow() {
+		
+		CM_Rules.shared.clearSessionRules()
+		CM_Player.current.resetGameState()
+		
+		let afterDismiss = { [weak self] in
+			
+			CM_Alert_ViewController.presentLoading({ alertController in
+				
+				CM_Ads.shared.presentInterstitial(Ads.FullScreen.Game.End, nil, {
+					
+					alertController?.close {
+						
+						if CM_Ads.shared.shouldDisplayAd {
+							
+							CM_InAppPurchase.shared.promptInAppPurchaseAlert(withCapping: true)
+						}
+					}
+				})
+			})
+			
+			_ = self
+		}
+		
+		if let navigationController, navigationController.presentingViewController != nil {
+			navigationController.dismiss(animated: true, completion: afterDismiss)
+		} else if presentingViewController != nil {
+			dismiss(animated: true, completion: afterDismiss)
+		} else {
+			afterDismiss()
+		}
+	}
+	
 	public override func dismiss(_ completion: (() -> Void)? = nil) {
 		
 		CM_Player.current.resetGameState()
 		
-		super.dismiss {
+		let finish = {
 			
 			completion?()
 			
@@ -529,6 +622,12 @@ public class CM_Game_ViewController : CM_ViewController {
 					}
 				})
 			})
+		}
+		
+		if let navigationController, navigationController.presentingViewController != nil {
+			navigationController.dismiss(animated: true, completion: finish)
+		} else {
+			super.dismiss(animated: true, completion: finish)
 		}
 	}
 	
@@ -630,6 +729,7 @@ public class CM_Game_ViewController : CM_ViewController {
 			
 			self.isRolling = false
 			self.calculateTurnScore()
+			self.pushNetworkGameStateIfNeeded()
 		}
 	}
 	
@@ -669,6 +769,7 @@ public class CM_Game_ViewController : CM_ViewController {
 			turnScoreLabel.text = "0"
 			
 			animateBallot()
+			pushNetworkGameStateIfNeeded(force: true, eventType: "ballot")
 			
 			// Après un ballot, réinitialiser pour le prochain tour
 			DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -681,9 +782,11 @@ public class CM_Game_ViewController : CM_ViewController {
 			updateValidateButton()
 			
 			// Afficher le tutoriel de sélection de dé si c'est le premier lancer et qu'il y a des dés scorants
-			if isCurrentPlayerHuman() && !scoringDiceIndices.isEmpty {
+			if isCurrentPlayerHuman() && !isNetworkMultiplayer && !scoringDiceIndices.isEmpty {
 				showDiceSelectionTutorial()
 			}
+			
+			pushNetworkGameStateIfNeeded()
 		}
 	}
 	
@@ -888,6 +991,18 @@ public class CM_Game_ViewController : CM_ViewController {
 		viewController.present()
 	}
 	
+	private func isLocalWinner(_ winner:CM_Player) -> Bool {
+		
+		if isNetworkMultiplayer {
+			guard let userId = networkUserId,
+				  let index = players.firstIndex(of: winner),
+				  index < networkPlayerIds.count else { return false }
+			return networkPlayerIds[index] == userId
+		}
+		
+		return winner == CM_Player.current
+	}
+	
 	private func handleVictory(for winner:CM_Player) {
 		
 		// Empêcher les appels multiples
@@ -901,13 +1016,29 @@ public class CM_Game_ViewController : CM_ViewController {
 		lastRoundTriggerPlayerIndex = nil
 		playersWhoPlayedLastRound.removeAll()
 		
-		// En mode multijoueur local, tout le monde est humain - pas de stats
-		if isLocalMultiplayer {
-			CM_Audio.shared.playSound(.Success)
-			CM_Feedback.shared.make(.On)
+		let iWon = isLocalWinner(winner)
+		
+		// Multijoueur local / réseau : pas de stats solo
+		if isLocalMultiplayer || isNetworkMultiplayer {
+			
+			if iWon {
+				CM_Audio.shared.playSound(.Success)
+				CM_Feedback.shared.make(.On)
+			} else {
+				CM_Audio.shared.playSound(.Error)
+				CM_Feedback.shared.make(.Off)
+			}
+			
+			// Seul le client qui gagne (ou qui constate la fin) pousse winnerId — pas pendant un apply distant
+			if isNetworkMultiplayer,
+			   !isApplyingRemoteState,
+			   let index = players.firstIndex(of: winner),
+			   index < networkPlayerIds.count {
+				pushNetworkGameStateIfNeeded(winnerId: networkPlayerIds[index], force: true)
+			}
 		}
 		// En mode solo, sauvegarder les stats du joueur
-		else if winner == CM_Player.current {
+		else if iWon {
 			
 			CM_Audio.shared.playSound(.Success)
 			CM_Feedback.shared.make(.On)
@@ -926,24 +1057,35 @@ public class CM_Game_ViewController : CM_ViewController {
 			currentPlayer.save()
 		}
 		
-		// Afficher l'alerte de victoire
 		let alert = CM_Alert_ViewController()
-		alert.title = String(key: "game.victory.title")
-        alert.backgroundView.isUserInteractionEnabled = false
-		alert.add(winner == CM_Player.current ? String(key: "game.victory.content.currentPlayer") : String(format: String(key: "game.victory.content"), winner.name ?? "?"))
+		alert.backgroundView.isUserInteractionEnabled = false
+		
+		if iWon {
+			alert.title = String(key: "game.victory.title")
+			alert.add(String(key: "game.victory.content.currentPlayer"))
+		} else {
+			alert.title = String(key: "game.defeat.title")
+			alert.add(String(format: String(key: "game.defeat.content"), winner.name ?? "?"))
+		}
+		
 		alert.addButton(title: String(key: "game.victory.button")) { [weak self] _ in
 			
 			alert.close { [weak self] in
 				
 				CM_Confettis.stop()
 				
-				self?.dismiss()
+				guard let self else { return }
+				
+				if self.isNetworkMultiplayer {
+					self.leaveNetworkGameAndDismiss()
+				} else {
+					self.dismiss()
+				}
 			}
 		}
 		alert.present {
 			
-			if winner == CM_Player.current {
-				
+			if iWon {
 				CM_Confettis.start()
 			}
 		}
@@ -1045,7 +1187,11 @@ public class CM_Game_ViewController : CM_ViewController {
 		let type:CM_Button.ButtonType
 		let enabled:Bool
 		
-		if isCurrentPlayerHuman() {
+		if isNetworkMultiplayer && !isMyNetworkTurn() {
+			title = String(key: "network.game.waiting")
+			type = .tertiary
+			enabled = false
+		} else if isCurrentPlayerHuman() {
 			if isStuckDueToExactScore() {
 				// Aucun coup possible sans dépasser : permettre de passer
 				title = String(key: "game.skip")
@@ -1160,6 +1306,7 @@ public class CM_Game_ViewController : CM_ViewController {
 		if isLastRound {
 			playersWhoPlayedLastRound.insert(currentPlayerIndex)
 			checkEndOfLastRound()
+			pushNetworkGameStateIfNeeded(force: true)
 			return
 		}
 		
@@ -1169,6 +1316,9 @@ public class CM_Game_ViewController : CM_ViewController {
 	
 	func nextPlayer() {
 		
+		// Capturer avant de changer d'index : c'est le joueur qui termine son tour qui doit pousser
+		let shouldSyncNetwork = isNetworkMultiplayer && isMyNetworkTurn() && !isApplyingRemoteState
+		
 		// Réinitialiser l'état du tour
 		hasRolledThisTurn = false
 		scoringDiceIndices.removeAll()
@@ -1176,6 +1326,7 @@ public class CM_Game_ViewController : CM_ViewController {
 		accumulatedScore = 0
 		turnScore = 0
 		turnScoreLabel.text = "0"
+		lastShownCombination = nil
 		
 		// Remettre tous les dés dans la stackview principale
 		resetDiceToContainer()
@@ -1186,9 +1337,17 @@ public class CM_Game_ViewController : CM_ViewController {
 		updateUIForCurrentPlayer()
 		updateRollHint()
 		
-		// Si c'est un adversaire (IA), jouer automatiquement
+		if shouldSyncNetwork {
+			pushNetworkGameStateIfNeeded(force: true)
+		}
+		
+		// Si c'est un adversaire (IA), jouer automatiquement — pas en réseau
 		if !isCurrentPlayerHuman() {
-			playAI()
+			if isNetworkMultiplayer {
+				isAIPlaying = false
+			} else {
+				playAI()
+			}
 		} else {
 			// C'est le tour du joueur humain - s'assurer que l'IA est arrêtée
 			isAIPlaying = false
@@ -1759,14 +1918,7 @@ public class CM_Game_ViewController : CM_ViewController {
 	
 	private func animateBallot() {
 		
-		let viewController:CM_Tutorial_ViewController = .init()
-		viewController.items = [
-			CM_Tutorial_ViewController.Item(
-				title: String(key: "game.ballot"),
-				timeInterval: 0.5
-			)
-		]
-		viewController.present()
+		presentTransientSplash(title: String(key: "game.ballot"), duration: 0.5)
 	}
 	
 	public override func viewWillAppear(_ animated: Bool) {
@@ -1972,6 +2124,8 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		// Mettre à jour le hint
 		updateRollHint()
+		
+		pushNetworkGameStateIfNeeded()
 	}
 	
 	/// Déplace un dé vers la bonne stackview (sélectionnés ou à lancer)
@@ -2160,9 +2314,20 @@ public class CM_Game_ViewController : CM_ViewController {
 		// Mettre à jour l'état du bouton valider
 		updateValidateButton()
 		
-		// Afficher un tutoriel si une combinaison est détectée
+		// Afficher un tutoriel si une combinaison est détectée (une seule fois par combo)
 		if !detectedCombinations.isEmpty {
-			showCombinationTutorial(combinations: detectedCombinations, completion: completion)
+			let combinationKey = detectedCombinations.joined(separator: "-")
+			if combinationKey != lastShownCombination {
+				if isNetworkMultiplayer {
+					pushNetworkGameStateIfNeeded(
+						eventType: "combination",
+						eventMessage: detectedCombinations.joined(separator: "\n")
+					)
+				}
+				showCombinationTutorial(combinations: detectedCombinations, completion: completion)
+			} else {
+				completion?()
+			}
 		} else {
 			completion?()
 		}
@@ -2352,6 +2517,7 @@ public class CM_Game_ViewController : CM_ViewController {
 	}
 	
 	private var lastShownCombination:String?
+	private weak var activeSplashTutorial:CM_Tutorial_ViewController?
 	
 	private func showCombinationTutorial(combinations:[String], completion:(()->Void)? = nil) {
 		
@@ -2363,17 +2529,48 @@ public class CM_Game_ViewController : CM_ViewController {
 		}
 		lastShownCombination = combinationKey
 		
-		let combinationText = combinations.joined(separator: "\n")
+		presentTransientSplash(
+			title: combinations.joined(separator: "\n"),
+			duration: 1.5,
+			completion: completion
+		)
+	}
+	
+	private func presentTransientSplash(title:String, duration:TimeInterval, completion:(()->Void)? = nil) {
 		
-		let viewController:CM_Tutorial_ViewController = .init()
-		viewController.items = [
-			CM_Tutorial_ViewController.Item(
-				title: combinationText,
-				timeInterval: 1.5
-			)
-		]
-		viewController.completion = completion
-		viewController.present()
+		let presentNew = { [weak self] in
+			
+			guard let self else {
+				completion?()
+				return
+			}
+			
+			let viewController:CM_Tutorial_ViewController = .init()
+			viewController.items = [
+				CM_Tutorial_ViewController.Item(
+					title: title,
+					timeInterval: duration
+				)
+			]
+			viewController.completion = { [weak self] in
+				if self?.activeSplashTutorial === viewController {
+					self?.activeSplashTutorial = nil
+				}
+				completion?()
+			}
+			self.activeSplashTutorial = viewController
+			viewController.present()
+		}
+		
+		// Évite l'empilement de splashs qui bloque l'interface
+		if let active = activeSplashTutorial {
+			activeSplashTutorial = nil
+			active.dismiss(animated: false) {
+				presentNew()
+			}
+		} else {
+			presentNew()
+		}
 	}
 	
 	private func handleInstantWin() {
@@ -2382,6 +2579,14 @@ public class CM_Game_ViewController : CM_ViewController {
 	}
 	
 	private func updateRollHint() {
+		
+		// Observateur réseau : ne pas écraser la disposition synchronisée des dés
+		if isNetworkMultiplayer && !isMyNetworkTurn() {
+			rollHintLabel.alpha = 0.0
+			rollPlaceholderLabel.isHidden = true
+			setUnlockedDiceVisible(hasRolledThisTurn)
+			return
+		}
 		
 		// Ne rien afficher si c'est le tour de l'IA
 		guard isCurrentPlayerHuman() else {
@@ -2512,6 +2717,461 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		alertViewController.addDismissButton()
 		alertViewController.present()
+	}
+	
+	// MARK: - Network sync
+	
+	func beginNetworkMatch(from state:CM_Game_State) {
+		
+		if networkUserId == nil {
+			networkUserId = CM_Multiplayer_Service.shared.currentUserId
+		}
+		
+		networkPlayerIds = state.players.map(\.id)
+		players = state.players.map { remote in
+			let player = CM_Player()
+			player.name = remote.name
+			player.scores = remote.scores
+			player.hasOpened = remote.hasOpened
+			return player
+		}
+		
+		currentPlayerIndex = state.currentPlayerIndex
+		turnScore = 0
+		turnScoreLabel.text = "0"
+		networkRevision = 0
+		networkEventId = 0
+		
+		stackView.alpha = 1.0
+		containerStackView.addArrangedSubview(bannerView)
+		
+		setupDice()
+		applyNetworkGameState(state)
+		updateUIForCurrentPlayer()
+		updateRollHint()
+	}
+	
+	func makeNetworkGameState(winnerId:String? = nil) -> CM_Game_State {
+		
+		let playerStates = zip(players, networkPlayerIds).map { player, networkId in
+			CM_Game_Player_State(
+				id: networkId,
+				name: player.name ?? "?",
+				scores: player.scores,
+				hasOpened: player.hasOpened
+			)
+		}
+		
+		let diceStates = diceViews.map {
+			CM_Game_Die_State(value: $0.value, isLocked: $0.isLocked, lockedAtRoll: $0.lockedAtRoll)
+		}
+		
+		networkRevision += 1
+		
+		var eventType = networkPendingEventType
+		var eventMessage = networkPendingEventMessage
+		var eventId = networkEventId
+		
+		if eventType != nil {
+			eventId += 1
+			networkEventId = eventId
+		}
+		
+		networkPendingEventType = nil
+		networkPendingEventMessage = nil
+		
+		return CM_Game_State(
+			revision: networkRevision,
+			currentPlayerIndex: currentPlayerIndex,
+			players: playerStates,
+			turnScore: turnScore,
+			accumulatedScore: accumulatedScore,
+			hasRolledThisTurn: hasRolledThisTurn,
+			currentRollNumber: currentRollNumber,
+			scoringDiceIndices: Array(scoringDiceIndices).sorted(),
+			dice: diceStates,
+			isLastRound: isLastRound,
+			lastRoundTriggerPlayerIndex: lastRoundTriggerPlayerIndex,
+			playersWhoPlayedLastRound: Array(playersWhoPlayedLastRound).sorted(),
+			winnerId: winnerId,
+			status: winnerId == nil ? "playing" : "finished",
+			eventType: eventType,
+			eventMessage: eventMessage,
+			eventId: eventId
+		)
+	}
+	
+	func pushNetworkGameStateIfNeeded(winnerId:String? = nil,
+									  force:Bool = false,
+									  eventType:String? = nil,
+									  eventMessage:String? = nil) {
+		
+		guard isNetworkMultiplayer,
+			  !isApplyingRemoteState,
+			  let roomId = networkRoomId else { return }
+		
+		guard force || isMyNetworkTurn() else { return }
+		
+		if let eventType {
+			networkPendingEventType = eventType
+			networkPendingEventMessage = eventMessage
+		}
+		
+		if isPushingNetworkState {
+			let mergedForce = force || (pendingNetworkPush?.force ?? false)
+			pendingNetworkPush = (
+				winnerId ?? pendingNetworkPush?.winnerId,
+				mergedForce,
+				eventType ?? pendingNetworkPush?.eventType,
+				eventMessage ?? pendingNetworkPush?.eventMessage
+			)
+			return
+		}
+		
+		isPushingNetworkState = true
+		let state = makeNetworkGameState(winnerId: winnerId)
+		
+		Task { [weak self] in
+			
+			do {
+				try await CM_Multiplayer_Service.shared.updateGameState(roomId: roomId, state: state)
+			} catch {
+				await MainActor.run {
+					print("[Network] sync error: \(error.localizedDescription)")
+				}
+			}
+			
+			await MainActor.run {
+				
+				guard let self else { return }
+				self.isPushingNetworkState = false
+				
+				if let pending = self.pendingNetworkPush {
+					self.pendingNetworkPush = nil
+					self.pushNetworkGameStateIfNeeded(
+						winnerId: pending.winnerId,
+						force: pending.force,
+						eventType: pending.eventType,
+						eventMessage: pending.eventMessage
+					)
+				}
+			}
+		}
+	}
+	
+	func applyNetworkGameState(_ state:CM_Game_State) {
+		
+		guard isNetworkMultiplayer else { return }
+		guard state.revision > networkRevision else { return }
+		
+		let previousRollNumber = currentRollNumber
+		let previousHasRolled = hasRolledThisTurn
+		let previousEventId = networkEventId
+		let previousCurrentId = networkPlayerIds[safe: currentPlayerIndex]
+		let previousPlayerIndex = currentPlayerIndex
+		let preservedPositions = Dictionary(uniqueKeysWithValues:
+			diceViews.enumerated().compactMap { index, dice -> (Int, CGPoint)? in
+				guard !dice.isLocked, let position = dice.originalPosition else { return nil }
+				return (index, position)
+			}
+		)
+		
+		isApplyingRemoteState = true
+		defer { isApplyingRemoteState = false }
+		
+		networkRevision = state.revision
+		networkEventId = max(networkEventId, state.eventId)
+		
+		players = state.players.map { remote in
+			let player = CM_Player()
+			player.name = remote.name
+			player.scores = remote.scores
+			player.hasOpened = remote.hasOpened
+			return player
+		}
+		networkPlayerIds = state.players.map(\.id)
+		
+		currentPlayerIndex = min(state.currentPlayerIndex, max(players.count - 1, 0))
+		
+		if currentPlayerIndex != previousPlayerIndex {
+			lastShownCombination = nil
+		}
+		
+		turnScore = state.turnScore
+		turnScoreLabel.text = "\(turnScore)"
+		accumulatedScore = state.accumulatedScore
+		hasRolledThisTurn = state.hasRolledThisTurn
+		currentRollNumber = state.currentRollNumber
+		scoringDiceIndices = Set(state.scoringDiceIndices)
+		isLastRound = state.isLastRound
+		lastRoundTriggerPlayerIndex = state.lastRoundTriggerPlayerIndex
+		playersWhoPlayedLastRound = Set(state.playersWhoPlayedLastRound)
+		
+		if diceViews.count != state.dice.count {
+			setupDice()
+			hasRolledThisTurn = state.hasRolledThisTurn
+			currentRollNumber = state.currentRollNumber
+			scoringDiceIndices = Set(state.scoringDiceIndices)
+			accumulatedScore = state.accumulatedScore
+		}
+		
+		let isNewEvent = state.eventId > previousEventId
+		let isNewRoll = state.hasRolledThisTurn && (state.currentRollNumber > previousRollNumber || (!previousHasRolled && state.hasRolledThisTurn))
+		// L'auteur de l'action est le joueur courant avant apply (ou le courant du state si mid-tour)
+		let actingPlayerId = previousCurrentId ?? state.players[safe: state.currentPlayerIndex]?.id
+		let eventFromOther = actingPlayerId != nil && actingPlayerId != networkUserId
+		
+		updatePlayersDisplay()
+		updateUIForCurrentPlayer()
+		
+		let presentRemoteFeedback = { [weak self] in
+			guard let self else { return }
+			
+			if isNewEvent {
+				switch state.eventType {
+				case "ballot" where eventFromOther:
+					self.animateBallot()
+				case "combination" where eventFromOther:
+					if let message = state.eventMessage, !message.isEmpty {
+						self.showCombinationTutorial(combinations: message.components(separatedBy: "\n"))
+					}
+				default:
+					break
+				}
+			}
+			
+			if let winnerId = state.winnerId,
+			   let index = self.networkPlayerIds.firstIndex(of: winnerId),
+			   index < self.players.count {
+				self.handleVictory(for: self.players[index])
+			}
+		}
+		
+		if isNewEvent, state.eventType == "playerLeft" {
+			layoutNetworkDice(from: state, preservePositions: preservedPositions)
+			updateRollHint()
+			updateSelectedDicePlaceholder()
+			pendingNetworkWinnerId = state.winnerId
+			showPlayerLeftAlert(name: state.eventMessage) { [weak self] in
+				self?.presentPendingNetworkVictoryIfNeeded()
+			}
+			return
+		}
+		
+		if isNewRoll && eventFromOther {
+			animateRemoteDiceRoll(from: state) {
+				presentRemoteFeedback()
+			}
+		} else {
+			layoutNetworkDice(from: state, preservePositions: !isNewRoll ? preservedPositions : [:])
+			updateRollHint()
+			updateSelectedDicePlaceholder()
+			presentRemoteFeedback()
+		}
+	}
+	
+	private func animateRemoteDiceRoll(from state:CM_Game_State, completion:(()->Void)? = nil) {
+		
+		rollId += 1
+		let currentRollId = rollId
+		isRolling = true
+		
+		rollHintLabel.alpha = 0.0
+		rollPlaceholderLabel.isHidden = true
+		
+		for dice in diceViews {
+			selectedDiceStackView.removeArrangedSubview(dice)
+			dice.removeFromSuperview()
+			diceContainerView.addSubview(dice)
+			dice.snp.removeConstraints()
+			dice.translatesAutoresizingMaskIntoConstraints = true
+		}
+		
+		view.layoutIfNeeded()
+		
+		var rollingDice:[(dice:CM_Dice, value:Int)] = []
+		
+		for (index, dieState) in state.dice.enumerated() where index < diceViews.count {
+			
+			let dice = diceViews[index]
+			dice.isLocked = dieState.isLocked
+			dice.lockedAtRoll = dieState.lockedAtRoll
+			dice.transform = .identity
+			dice.alpha = 1.0
+			
+			if dieState.isLocked {
+				dice.value = dieState.value
+				dice.isHidden = false
+				dice.translatesAutoresizingMaskIntoConstraints = false
+				selectedDiceStackView.addArrangedSubview(dice)
+				dice.snp.remakeConstraints { make in
+					make.width.height.equalTo(50)
+				}
+			} else {
+				dice.isHidden = false
+				rollingDice.append((dice, dieState.value))
+			}
+		}
+		
+		updateSelectedDicePlaceholder()
+		
+		guard !rollingDice.isEmpty else {
+			isRolling = false
+			updateRollHint()
+			completion?()
+			return
+		}
+		
+		playRemoteRollFeedback(diceCount: rollingDice.count)
+		
+		let lockedPositions = diceViews
+			.filter { $0.isLocked && $0.superview == diceContainerView }
+			.compactMap { $0.originalPosition }
+		let finalPositions = generateRandomPositions(count: rollingDice.count, avoiding: lockedPositions)
+		
+		let centerX = diceContainerView.bounds.midX - 25
+		let centerY = diceContainerView.bounds.midY - 25
+		
+		for entry in rollingDice {
+			positionDice(entry.dice, at: CGPoint(x: centerX, y: centerY))
+		}
+		
+		let group = DispatchGroup()
+		
+		for (index, entry) in rollingDice.enumerated() {
+			
+			group.enter()
+			
+			let finalPosition = finalPositions[safe: index] ?? .zero
+			entry.dice.originalPosition = finalPosition
+			
+			UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseOut]) {
+				entry.dice.frame.origin = finalPosition
+			}
+			
+			entry.dice.roll(to: entry.value, feedback: false) {
+				group.leave()
+			}
+		}
+		
+		group.notify(queue: .main) { [weak self] in
+			
+			guard let self else {
+				completion?()
+				return
+			}
+			
+			guard self.rollId == currentRollId else { return }
+			
+			self.isRolling = false
+			self.updateRollHint()
+			self.updateSelectedDicePlaceholder()
+			completion?()
+		}
+	}
+	
+	private func layoutNetworkDice(from state:CM_Game_State, preservePositions:[Int:CGPoint] = [:]) {
+		
+		for dice in diceViews {
+			selectedDiceStackView.removeArrangedSubview(dice)
+			dice.removeFromSuperview()
+			diceContainerView.addSubview(dice)
+			dice.snp.removeConstraints()
+			dice.translatesAutoresizingMaskIntoConstraints = true
+		}
+		
+		view.layoutIfNeeded()
+		
+		let unlockedCount = state.dice.filter { !$0.isLocked }.count
+		var positions:[CGPoint] = []
+		
+		if state.hasRolledThisTurn {
+			var reused:[CGPoint] = []
+			for index in state.dice.indices where !state.dice[index].isLocked {
+				if let kept = preservePositions[index] {
+					reused.append(kept)
+				}
+			}
+			
+			if reused.count == unlockedCount {
+				positions = reused
+			} else {
+				positions = generateRandomPositions(count: unlockedCount, avoiding: reused)
+				if !reused.isEmpty {
+					positions = reused + Array(positions.prefix(max(0, unlockedCount - reused.count)))
+				}
+			}
+		}
+		
+		var unlockedIndex = 0
+		
+		for (index, dieState) in state.dice.enumerated() where index < diceViews.count {
+			
+			let dice = diceViews[index]
+			dice.value = dieState.value
+			dice.isLocked = dieState.isLocked
+			dice.lockedAtRoll = dieState.lockedAtRoll
+			dice.transform = .identity
+			dice.alpha = 1.0
+			
+			if dieState.isLocked {
+				dice.isHidden = false
+				dice.translatesAutoresizingMaskIntoConstraints = false
+				selectedDiceStackView.addArrangedSubview(dice)
+				dice.snp.remakeConstraints { make in
+					make.width.height.equalTo(50)
+				}
+			} else if state.hasRolledThisTurn {
+				dice.isHidden = false
+				let position = positions[safe: unlockedIndex] ?? .zero
+				unlockedIndex += 1
+				dice.originalPosition = position
+				dice.frame = CGRect(x: position.x, y: position.y, width: 50, height: 50)
+			} else {
+				dice.isHidden = true
+				dice.originalPosition = nil
+			}
+		}
+	}
+	
+	private func playRemoteRollFeedback(diceCount:Int) {
+		
+		let count = max(1, min(diceCount, 6))
+		let key = CM_Audio.Sounds.RawValue(key: "Dice_\(count)")
+		if let sound = CM_Audio.Sounds(rawValue: key) {
+			CM_Audio.shared.playSound(sound)
+		}
+		CM_Feedback.shared.make(.On)
+	}
+	
+	private func showPlayerLeftAlert(name:String?, completion:(()->Void)? = nil) {
+		
+		let alert = CM_Alert_ViewController()
+		alert.title = String(key: "network.game.playerLeft.title")
+		let playerName = name ?? "?"
+		alert.add(String(format: String(key: "network.game.playerLeft.content"), playerName))
+		alert.addDismissButton { _ in
+			completion?()
+		}
+		alert.present()
+	}
+	
+	private func presentPendingNetworkVictoryIfNeeded() {
+		
+		guard let winnerId = pendingNetworkWinnerId else { return }
+		pendingNetworkWinnerId = nil
+		
+		guard let index = networkPlayerIds.firstIndex(of: winnerId),
+			  index < players.count else { return }
+		
+		handleVictory(for: players[index])
+	}
+}
+
+private extension Array {
+	
+	subscript(safe index:Int) -> Element? {
+		indices.contains(index) ? self[index] : nil
 	}
 }
 

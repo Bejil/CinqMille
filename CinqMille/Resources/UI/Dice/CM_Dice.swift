@@ -126,14 +126,21 @@ public class CM_Dice : UIView {
 	
 	public func roll(_ feedback:Bool = true, completion: (() -> Void)? = nil) {
 		
+		roll(to: Int.random(in: 1...6), feedback: feedback, completion: completion)
+	}
+	
+	/// Lance le dé jusqu'à une valeur finale connue (sync réseau).
+	public func roll(to finalValue:Int, feedback:Bool = true, completion: (() -> Void)? = nil) {
+		
 		guard !isLocked else {
+			value = finalValue
 			completion?()
 			return
 		}
 		
 		let duration:TimeInterval = 0.5
 		let rotations:Int = Int.random(in: 3...5)
-		let finalValue = Int.random(in: 1...6)
+		let clampedFinal = max(1, min(6, finalValue))
 		
 		// Animation de rotation avec changement de valeurs
 		let animationSteps = rotations * 4
@@ -154,7 +161,7 @@ public class CM_Dice : UIView {
 				if step < animationSteps - 1 {
 					self.value = Int.random(in: 1...6)
 				} else {
-					self.value = finalValue
+					self.value = clampedFinal
 				}
 				
 				// Animation de rebond

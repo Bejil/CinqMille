@@ -90,6 +90,13 @@ public class CM_Menu_ViewController : CM_ViewController {
 					}
 				}
 			}
+			alertController.addButton(title: String(key: "newGame.alert.network")) { _ in
+				
+				alertController.close {
+					
+					UI.MainController.present(CM_NavigationController(rootViewController: CM_Network_Lobby_ViewController()), animated: true)
+				}
+			}
 			alertController.addCancelButton()
 			alertController.present()
 		}

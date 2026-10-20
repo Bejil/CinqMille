@@ -15,6 +15,7 @@ public class AppDelegate: UIResponder, UIApplicationDelegate {
 	
 	public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
 		
+		CM_Firebase.configure()
 		CM_Ads.shared.start()
 		CM_Audio.shared.playMusic()
 		
