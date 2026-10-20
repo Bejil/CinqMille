@@ -37,6 +37,11 @@ public class CM_Network_Game_ViewController: CM_Game_ViewController {
 		networkRoomId = initialRoom.id
 		networkUserId = CM_Multiplayer_Service.shared.currentUserId
 		
+		let playerName = initialRoom.players.first(where: { $0.id == networkUserId })?.name
+			?? CM_Player.current.name
+			?? "?"
+		CM_Multiplayer_Service.shared.rememberActiveRoom(roomId: initialRoom.id, playerName: playerName)
+		
 		let rulesButton = CM_Button() { [weak self] _ in
 			self?.presentMatchRules()
 		}
@@ -47,6 +52,7 @@ public class CM_Network_Game_ViewController: CM_Game_ViewController {
 		
 		var rightItems:[UIBarButtonItem] = [.init(customView: rulesButton)]
 		if let existing = navigationItem.rightBarButtonItem {
+			(existing.customView as? CM_Settings_Button)?.hidesAutoPass = true
 			rightItems.append(existing)
 		}
 		navigationItem.rightBarButtonItems = rightItems

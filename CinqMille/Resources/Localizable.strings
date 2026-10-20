@@ -33,8 +33,8 @@
 "network.lobby.title" = "Partie en ligne";
 "network.lobby.home.subtitle" = "Créez une partie, rejoignez-en une avec un code ou un QR, ou rejoignez automatiquement une partie en attente.";
 "network.lobby.create" = "Créer une partie";
-"network.lobby.join" = "Rejoindre avec un code";
-"network.lobby.joinWaiting" = "Rejoindre une partie";
+"network.lobby.join" = "Rejoindre une partie";
+"network.lobby.joinWaiting" = "Partie aléatoire";
 "network.lobby.joinWaiting.empty" = "Aucune partie en attente pour le moment.";
 "network.lobby.join.choice.title" = "Rejoindre une partie";
 "network.lobby.join.choice.content" = "Entrez le code à la main ou scannez le QR code de l'hôte.";
@@ -61,6 +61,7 @@
 "network.lobby.cancelled.content" = "L'hôte a quitté. La partie a été annulée.";
 "network.game.title" = "Partie en ligne";
 "network.game.waiting" = "En attente…";
+"network.game.timeout" = "Temps écoulé";
 "network.game.playerLeft.title" = "Joueur parti";
 "network.game.playerLeft.content" = "%@ a quitté la partie.";
 "network.error.firebaseNotConfigured" = "Firebase n'est pas configuré. Ajoutez GoogleService-Info.plist.";

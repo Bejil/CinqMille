@@ -9,13 +9,18 @@ import UIKit
 
 public class CM_Settings_Button : CM_Button {
 	
+	/// Masque « Passer auto » (ex. multijoueur en ligne)
+	public var hidesAutoPass:Bool = false {
+		didSet { menu = settingsMenu }
+	}
+	
 	private var isAutoPassEnabled:Bool {
 		(UserDefaults.get(.autoPassEnabled) as? Bool) ?? false
 	}
 	
 	private var settingsMenu:UIMenu {
 		
-		return .init(children: [
+		var actions:[UIMenuElement] = [
 			
 			UIAction(title: String(key: "settings.button.sounds"), subtitle: String(key: "settings.button.sounds." + (CM_Audio.shared.isSoundsEnabled ? "on" : "off")), image: UIImage(systemName: CM_Audio.shared.isSoundsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill"), handler: { [weak self] _ in
 				
@@ -40,16 +45,23 @@ public class CM_Settings_Button : CM_Button {
 				UserDefaults.set(!CM_Feedback.shared.isVibrationsEnabled, .vibrationsEnabled)
 				
 				self?.menu = self?.settingsMenu
-			}),
-			UIAction(title: String(key: "settings.button.autoPass"), subtitle: String(key: "settings.button.autoPass." + (isAutoPassEnabled ? "on" : "off")), image: UIImage(systemName: isAutoPassEnabled ? "forward.fill" : "forward"), handler: { [weak self] _ in
-				
-				UserDefaults.set(!(self?.isAutoPassEnabled ?? false), .autoPassEnabled)
-				
-				CM_Audio.shared.playSound(.Button)
-				
-				self?.menu = self?.settingsMenu
 			})
-		])
+		]
+		
+		if !hidesAutoPass {
+			actions.append(
+				UIAction(title: String(key: "settings.button.autoPass"), subtitle: String(key: "settings.button.autoPass." + (isAutoPassEnabled ? "on" : "off")), image: UIImage(systemName: isAutoPassEnabled ? "forward.fill" : "forward"), handler: { [weak self] _ in
+					
+					UserDefaults.set(!(self?.isAutoPassEnabled ?? false), .autoPassEnabled)
+					
+					CM_Audio.shared.playSound(.Button)
+					
+					self?.menu = self?.settingsMenu
+				})
+			)
+		}
+		
+		return .init(children: actions)
 	}
 	
 	public override init(frame: CGRect) {

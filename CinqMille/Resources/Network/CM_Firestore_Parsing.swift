@@ -36,4 +36,13 @@ enum CM_Firestore_Parsing {
 		if let value = value as? NSNumber { return value.boolValue }
 		return defaultValue
 	}
+	
+	static func double(_ value:Any?) -> Double? {
+		
+		if let value = value as? Double { return value }
+		if let value = value as? Int { return Double(value) }
+		if let value = value as? Int64 { return Double(value) }
+		if let value = value as? NSNumber { return value.doubleValue }
+		return nil
+	}
 }

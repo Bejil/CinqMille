@@ -152,7 +152,7 @@ public class CM_Network_Lobby_ViewController: CM_ViewController {
 		}
 		
 		showHome()
-		cleanupFinishedRoomsInBackground()
+		cleanupInactiveRoomsInBackground()
 	}
 	
 	public override func viewDidDisappear(_ animated: Bool) {
@@ -344,7 +344,7 @@ public class CM_Network_Lobby_ViewController: CM_ViewController {
 		Task { [weak self] in
 			
 			do {
-				_ = try? await CM_Multiplayer_Service.shared.cleanupFinishedRooms()
+				_ = try? await CM_Multiplayer_Service.shared.reclaimOrphanedSessionAndCleanup()
 				let rooms = try await CM_Multiplayer_Service.shared.fetchWaitingRooms()
 				
 				guard let room = rooms.first else {
@@ -374,10 +374,10 @@ public class CM_Network_Lobby_ViewController: CM_ViewController {
 		}
 	}
 	
-	private func cleanupFinishedRoomsInBackground() {
+	private func cleanupInactiveRoomsInBackground() {
 		
 		Task {
-			_ = try? await CM_Multiplayer_Service.shared.cleanupFinishedRooms()
+			_ = try? await CM_Multiplayer_Service.shared.reclaimOrphanedSessionAndCleanup()
 		}
 	}
 	

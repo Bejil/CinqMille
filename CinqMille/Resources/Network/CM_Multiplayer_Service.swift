@@ -48,6 +48,12 @@ public final class CM_Multiplayer_Service {
 	private var roomListener:ListenerRegistration?
 	private var listeningRoomId:String?
 	
+	/// Lobby sans activité : purge après ce délai
+	public static let waitingRoomInactivityLimit:TimeInterval = 30 * 60
+	/// Partie en cours sans activité (crash / abandon) : purge après ce délai
+	/// (largement au-dessus du timer de tour de 15 s)
+	public static let playingRoomInactivityLimit:TimeInterval = 10 * 60
+	
 	public var currentUserId:String? {
 		Auth.auth().currentUser?.uid
 	}
@@ -105,6 +111,7 @@ public final class CM_Multiplayer_Service {
 		)
 		
 		try await document.setData(room.firestoreData())
+		rememberActiveRoom(roomId: room.id, playerName: playerName)
 		return room
 	}
 	
@@ -151,12 +158,15 @@ public final class CM_Multiplayer_Service {
 		room.updatedAt = .init()
 		
 		try await document.reference.setData(room.firestoreData(), merge: true)
+		rememberActiveRoom(roomId: room.id, playerName: playerName)
 		return room
 	}
 	
 	public func leaveRoom(roomId:String) async throws {
 		
 		guard let userId = currentUserId else { return }
+		
+		defer { clearActiveRoomIfNeeded(roomId: roomId) }
 		
 		guard var room = try? await fetchRoom(roomId: roomId) else { return }
 		
@@ -238,34 +248,114 @@ public final class CM_Multiplayer_Service {
 			.whereField("status", isEqualTo: CM_Room_Status.waiting.rawValue)
 			.getDocuments()
 		
+		let waitingCutoff = Date().addingTimeInterval(-Self.waitingRoomInactivityLimit)
+		
 		return snapshot.documents
 			.compactMap { CM_Room.from(document: $0) }
-			.filter { !$0.isFull }
+			.filter { !$0.isFull && $0.updatedAt >= waitingCutoff && !$0.players.isEmpty }
 			.sorted { $0.updatedAt > $1.updatedAt }
 	}
 	
-	/// Supprime les documents `finished` (et les lobbys vides) restés en base.
+	/// Alias historique — délègue à `cleanupInactiveRooms`.
 	@discardableResult
 	public func cleanupFinishedRooms() async throws -> Int {
+		try await cleanupInactiveRooms()
+	}
+	
+	/// Purge les parties terminées et celles sans activité récente (crash / abandon).
+	/// Filtrage TTL côté client (évite un index composite Firestore).
+	@discardableResult
+	public func cleanupInactiveRooms() async throws -> Int {
 		
 		_ = try await ensureSignedIn()
 		
-		let finished = try await db.collection(roomsCollection)
-			.whereField("status", isEqualTo: CM_Room_Status.finished.rawValue)
-			.getDocuments()
+		let now = Date()
+		let waitingCutoff = now.addingTimeInterval(-Self.waitingRoomInactivityLimit)
+		let playingCutoff = now.addingTimeInterval(-Self.playingRoomInactivityLimit)
 		
 		var deleted = 0
+		var seenIds = Set<String>()
 		
-		for document in finished.documents {
+		func deleteIfNeeded(_ document:QueryDocumentSnapshot, room:CM_Room) async throws {
+			guard seenIds.insert(document.documentID).inserted else { return }
 			try await document.reference.delete()
 			deleted += 1
+			if (UserDefaults.get(.activeNetworkRoomId) as? String) == document.documentID {
+				clearActiveRoom()
+			}
+		}
+		
+		for status in [CM_Room_Status.finished, .waiting, .playing] {
+			
+			let snapshot = try await db.collection(roomsCollection)
+				.whereField("status", isEqualTo: status.rawValue)
+				.getDocuments()
+			
+			for document in snapshot.documents {
+				
+				guard let room = CM_Room.from(document: document) else { continue }
+				
+				let shouldDelete:Bool
+				switch room.status {
+				case .finished:
+					shouldDelete = true
+				case .waiting:
+					shouldDelete = room.updatedAt < waitingCutoff || room.players.isEmpty
+				case .playing:
+					shouldDelete = room.updatedAt < playingCutoff || room.players.isEmpty
+				}
+				
+				if shouldDelete {
+					try await deleteIfNeeded(document, room: room)
+				}
+			}
 		}
 		
 		return deleted
 	}
 	
+	/// Après un crash ou un kill de l'app : quitte la dernière room mémorisée, puis purge les inactives.
+	@discardableResult
+	public func reclaimOrphanedSessionAndCleanup() async throws -> Int {
+		
+		_ = try await ensureSignedIn()
+		try await reclaimOrphanedSession()
+		return try await cleanupInactiveRooms()
+	}
+	
+	/// Quitte la room encore associée à cet appareil si l'app a été tuée sans `leave`.
+	public func reclaimOrphanedSession() async throws {
+		
+		guard let roomId = UserDefaults.get(.activeNetworkRoomId) as? String,
+			  !roomId.isEmpty else { return }
+		
+		let playerName = (UserDefaults.get(.activeNetworkPlayerName) as? String) ?? "?"
+		
+		do {
+			let room = try await fetchRoom(roomId: roomId)
+			
+			guard let userId = currentUserId,
+				  room.player(withId: userId) != nil else {
+				clearActiveRoom()
+				return
+			}
+			
+			if room.status == .playing || room.status == .finished {
+				_ = try await leaveNetworkGame(roomId: roomId, playerName: playerName)
+			} else {
+				try await leaveRoom(roomId: roomId)
+			}
+		} catch CM_Multiplayer_Error.roomNotFound {
+			clearActiveRoom()
+		} catch {
+			// Room déjà absente ou erreur réseau : on efface quand même le marquage local
+			clearActiveRoom()
+		}
+	}
+	
 	public func deleteRoom(roomId:String) async throws {
 		
+		clearActiveRoomIfNeeded(roomId: roomId)
 		try await db.collection(roomsCollection).document(roomId).delete()
 	}
 	
@@ -274,6 +364,8 @@ public final class CM_Multiplayer_Service {
 	public func leaveNetworkGame(roomId:String, playerName:String) async throws -> CM_Game_State? {
 		
 		guard let userId = currentUserId else { return nil }
+		
+		defer { clearActiveRoomIfNeeded(roomId: roomId) }
 		
 		var room = try await fetchRoom(roomId: roomId)
 		let leftName = room.players.first(where: { $0.id == userId })?.name ?? playerName
@@ -401,6 +493,27 @@ public final class CM_Multiplayer_Service {
 		roomListener?.remove()
 		roomListener = nil
 		listeningRoomId = nil
+	}
+	
+	// MARK: - Active session (crash recovery)
+	
+	public func rememberActiveRoom(roomId:String, playerName:String) {
+		
+		UserDefaults.set(roomId, .activeNetworkRoomId)
+		UserDefaults.set(playerName, .activeNetworkPlayerName)
+	}
+	
+	public func clearActiveRoom() {
+		
+		UserDefaults.delete(.activeNetworkRoomId)
+		UserDefaults.delete(.activeNetworkPlayerName)
+	}
+	
+	private func clearActiveRoomIfNeeded(roomId:String) {
+		
+		guard let active = UserDefaults.get(.activeNetworkRoomId) as? String,
+			  active == roomId else { return }
+		clearActiveRoom()
 	}
 	
 	// MARK: - Helpers

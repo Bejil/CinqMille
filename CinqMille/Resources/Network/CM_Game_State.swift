@@ -40,6 +40,9 @@ public struct CM_Game_Player_State: Codable, Equatable {
 
 public struct CM_Game_State: Codable, Equatable {
 	
+	/// Durée maximale d'un tour en multijoueur en ligne (secondes) — réinitialisée à chaque relance (pas au 1er lancer)
+	public static let networkTurnDuration: TimeInterval = 25
+	
 	public var revision:Int
 	public var currentPlayerIndex:Int
 	public var players:[CM_Game_Player_State]
@@ -54,10 +57,12 @@ public struct CM_Game_State: Codable, Equatable {
 	public var playersWhoPlayedLastRound:[Int]
 	public var winnerId:String?
 	public var status:String
-	/// ballot | combination | playerLeft
+	/// ballot | combination | playerLeft | timeout
 	public var eventType:String?
 	public var eventMessage:String?
 	public var eventId:Int
+	/// Timestamp Unix de fin de tour (décompte synchronisé)
+	public var turnEndsAt:Double?
 	
 	public static func initial(roomPlayers:[CM_Room_Player], diceCount:Int) -> CM_Game_State {
 		
@@ -80,7 +85,8 @@ public struct CM_Game_State: Codable, Equatable {
 			status: "playing",
 			eventType: nil,
 			eventMessage: nil,
-			eventId: 0
+			eventId: 0,
+			turnEndsAt: Date().timeIntervalSince1970 + networkTurnDuration
 		)
 	}
 	
@@ -117,7 +123,8 @@ public struct CM_Game_State: Codable, Equatable {
 			"eventType": eventType as Any? ?? NSNull(),
 			"eventMessage": eventMessage as Any? ?? NSNull(),
 			"winnerId": winnerId as Any? ?? NSNull(),
-			"lastRoundTriggerPlayerIndex": lastRoundTriggerPlayerIndex as Any? ?? NSNull()
+			"lastRoundTriggerPlayerIndex": lastRoundTriggerPlayerIndex as Any? ?? NSNull(),
+			"turnEndsAt": turnEndsAt as Any? ?? NSNull()
 		]
 		
 		return data
@@ -169,7 +176,8 @@ public struct CM_Game_State: Codable, Equatable {
 			status: data["status"] as? String ?? "playing",
 			eventType: data["eventType"] as? String,
 			eventMessage: data["eventMessage"] as? String,
-			eventId: CM_Firestore_Parsing.int(data["eventId"], default: 0)
+			eventId: CM_Firestore_Parsing.int(data["eventId"], default: 0),
+			turnEndsAt: CM_Firestore_Parsing.double(data["turnEndsAt"])
 		)
 	}
 }

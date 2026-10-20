@@ -30,6 +30,10 @@ public class CM_Game_ViewController : CM_ViewController {
 	private var networkPendingEventType:String?
 	private var networkPendingEventMessage:String?
 	private var pendingNetworkWinnerId:String?
+	/// Fin du tour courant (timestamp Unix), synchronisée via Firestore
+	private var networkTurnEndsAt:TimeInterval?
+	private var networkTurnTimer:Timer?
+	private var isForfeitingNetworkTurn:Bool = false
 	
 	/// Retourne true si le joueur actuel est un humain (localement contrôlable)
 	func isCurrentPlayerHuman() -> Bool {
@@ -542,6 +546,8 @@ public class CM_Game_ViewController : CM_ViewController {
 	
 	func leaveNetworkGameAndDismiss() {
 		
+		stopNetworkTurnTimer()
+		
 		guard let roomId = networkRoomId else {
 			dismissPresentedNetworkFlow()
 			return
@@ -570,6 +576,7 @@ public class CM_Game_ViewController : CM_ViewController {
 	/// Ferme le flux modal (NavigationController présenté), pas seulement le VC enfant.
 	func dismissPresentedNetworkFlow() {
 		
+		stopNetworkTurnTimer()
 		CM_Rules.shared.clearSessionRules()
 		CM_Player.current.resetGameState()
 		
@@ -652,6 +659,11 @@ public class CM_Game_ViewController : CM_ViewController {
 		// Incrémenter le rollId pour invalider les callbacks d'un éventuel lancer précédent
 		rollId += 1
 		let currentRollId = rollId
+		
+		// Relancer le décompte à chaque relance du même tour (pas au premier lancer)
+		if isNetworkMultiplayer && isMyNetworkTurn() && !isApplyingRemoteState && hasRolledThisTurn {
+			refreshNetworkTurnDeadline()
+		}
 		
 		// Masquer les placeholders et hints pendant le lancer
 		rollHintLabel.alpha = 0.0
@@ -768,6 +780,10 @@ public class CM_Game_ViewController : CM_ViewController {
 			turnScore = 0
 			turnScoreLabel.text = "0"
 			
+			if isNetworkMultiplayer {
+				stopNetworkTurnTimer()
+			}
+			
 			animateBallot()
 			pushNetworkGameStateIfNeeded(force: true, eventType: "ballot")
 			
@@ -849,6 +865,11 @@ public class CM_Game_ViewController : CM_ViewController {
 	private func validateTurn() {
 		
 		guard canValidate() else { return }
+		
+		// Arrêter le décompte : la validation a eu lieu avant 0
+		if isNetworkMultiplayer {
+			stopNetworkTurnTimer()
+		}
 		
 		let currentPlayer = players[currentPlayerIndex]
 		let rules = CM_Rules.shared
@@ -1009,6 +1030,7 @@ public class CM_Game_ViewController : CM_ViewController {
 		guard !victoryHandled else { return }
 		victoryHandled = true
 		
+		stopNetworkTurnTimer()
 		isAIPlaying = false
 		
 		// Réinitialiser l'état du dernier tour
@@ -1178,7 +1200,9 @@ public class CM_Game_ViewController : CM_ViewController {
 	}
 	
 	private var isAutoPassEnabled:Bool {
-		(UserDefaults.get(.autoPassEnabled) as? Bool) ?? false
+		// Indisponible en multijoueur en ligne
+		if isNetworkMultiplayer { return false }
+		return (UserDefaults.get(.autoPassEnabled) as? Bool) ?? false
 	}
 	
 	func updateValidateButton() {
@@ -1188,18 +1212,18 @@ public class CM_Game_ViewController : CM_ViewController {
 		let enabled:Bool
 		
 		if isNetworkMultiplayer && !isMyNetworkTurn() {
-			title = String(key: "network.game.waiting")
+			title = titleWithNetworkCountdown(String(key: "network.game.waiting"))
 			type = .tertiary
 			enabled = false
 		} else if isCurrentPlayerHuman() {
 			if isStuckDueToExactScore() {
 				// Aucun coup possible sans dépasser : permettre de passer
-				title = String(key: "game.skip")
+				title = titleWithNetworkCountdown(String(key: "game.skip"))
 				type = .tertiary
 				enabled = true
 				scheduleAutoPassIfNeeded()
 			} else {
-				title = String(key: "game.validate")
+				title = titleWithNetworkCountdown(String(key: "game.validate"))
 				type = .secondary
 				enabled = canValidate()
 			}
@@ -1220,6 +1244,17 @@ public class CM_Game_ViewController : CM_ViewController {
 		if validateButton.isEnabled != enabled {
 			validateButton.isEnabled = enabled
 		}
+	}
+	
+	/// Ajoute le décompte restant au titre du bouton (mode réseau uniquement)
+	private func titleWithNetworkCountdown(_ base:String) -> String {
+		
+		guard isNetworkMultiplayer,
+			  !victoryHandled,
+			  let endsAt = networkTurnEndsAt else { return base }
+		
+		let remaining = max(0, Int(ceil(endsAt - Date().timeIntervalSince1970)))
+		return "\(base) (\(remaining))"
 	}
 	
 	/// Passe automatiquement le tour si l'option est activée et qu'aucun coup n'est possible
@@ -1278,11 +1313,48 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		guard isStuckDueToExactScore() else { return }
 		
+		if isNetworkMultiplayer {
+			stopNetworkTurnTimer()
+		}
+		
 		CM_Audio.shared.playSound(.Tap)
 		CM_Feedback.shared.make(.On)
 		
 		turnScore = 0
 		turnScoreLabel.text = "0"
+		endTurn()
+	}
+	
+	/// Temps écoulé : tour perdu, aucun point comptabilisé, passage au joueur suivant
+	private func forfeitNetworkTurnDueToTimeout() {
+		
+		guard isNetworkMultiplayer,
+			  isMyNetworkTurn(),
+			  !isApplyingRemoteState,
+			  !victoryHandled,
+			  !isForfeitingNetworkTurn else { return }
+		
+		isForfeitingNetworkTurn = true
+		defer { isForfeitingNetworkTurn = false }
+		
+		stopNetworkTurnTimer()
+		
+		// Annuler un lancer / animations en cours
+		rollId += 1
+		isRolling = false
+		isAIPlaying = false
+		
+		turnScore = 0
+		accumulatedScore = 0
+		turnScoreLabel.text = "0"
+		scoringDiceIndices.removeAll()
+		
+		CM_Audio.shared.playSound(.Error)
+		CM_Feedback.shared.make(.Off)
+		
+		networkPendingEventType = "timeout"
+		networkPendingEventMessage = String(key: "network.game.timeout")
+		
 		endTurn()
 	}
 	
@@ -1333,6 +1405,12 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		// Passer au joueur suivant
 		currentPlayerIndex = (currentPlayerIndex + 1) % players.count
+		
+		// Nouveau délai pour le joueur qui commence (poussé avec l'état)
+		if isNetworkMultiplayer && !isApplyingRemoteState {
+			refreshNetworkTurnDeadline()
+		}
+		
 		updatePlayersDisplay()
 		updateUIForCurrentPlayer()
 		updateRollHint()
@@ -2797,8 +2875,76 @@ public class CM_Game_ViewController : CM_ViewController {
 			status: winnerId == nil ? "playing" : "finished",
 			eventType: eventType,
 			eventMessage: eventMessage,
-			eventId: eventId
+			eventId: eventId,
+			turnEndsAt: networkTurnEndsAt
 		)
+	}
+	
+	// MARK: - Network turn timer
+	
+	private func refreshNetworkTurnDeadline() {
+		
+		networkTurnEndsAt = Date().timeIntervalSince1970 + CM_Game_State.networkTurnDuration
+		startNetworkTurnTimer()
+	}
+	
+	private func startNetworkTurnTimer() {
+		
+		stopNetworkTurnTimer(clearDeadline: false)
+		
+		guard isNetworkMultiplayer,
+			  !victoryHandled,
+			  networkTurnEndsAt != nil else {
+			updateValidateButton()
+			return
+		}
+		
+		updateValidateButton()
+		
+		let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+			self?.tickNetworkTurnTimer()
+		}
+		RunLoop.main.add(timer, forMode: .common)
+		networkTurnTimer = timer
+		
+		// Vérifier immédiatement (ex. état distant déjà expiré)
+		tickNetworkTurnTimer()
+	}
+	
+	private func stopNetworkTurnTimer(clearDeadline:Bool = true) {
+		
+		networkTurnTimer?.invalidate()
+		networkTurnTimer = nil
+		if clearDeadline {
+			networkTurnEndsAt = nil
+		}
+	}
+	
+	private func tickNetworkTurnTimer() {
+		
+		guard isNetworkMultiplayer, !victoryHandled else {
+			stopNetworkTurnTimer()
+			return
+		}
+		
+		guard let endsAt = networkTurnEndsAt else {
+			updateValidateButton()
+			return
+		}
+		
+		let remaining = endsAt - Date().timeIntervalSince1970
+		updateValidateButton()
+		
+		guard remaining <= 0 else { return }
+		
+		if isMyNetworkTurn() {
+			// Pendant un apply distant, laisser le timer tourner : le forfait partira au tick suivant
+			guard !isApplyingRemoteState else { return }
+			forfeitNetworkTurnDueToTimeout()
+		} else {
+			// Spectateur : garder l'affichage à 0 jusqu'à la synchro
+			stopNetworkTurnTimer(clearDeadline: false)
+		}
 	}
 	
 	func pushNetworkGameStateIfNeeded(winnerId:String? = nil,
@@ -2907,6 +3053,17 @@ public class CM_Game_ViewController : CM_ViewController {
 		lastRoundTriggerPlayerIndex = state.lastRoundTriggerPlayerIndex
 		playersWhoPlayedLastRound = Set(state.playersWhoPlayedLastRound)
 		
+		// Synchroniser le décompte de tour
+		if state.winnerId != nil || state.status == "finished" {
+			stopNetworkTurnTimer()
+		} else {
+			networkTurnEndsAt = state.turnEndsAt
+			if networkTurnEndsAt == nil {
+				networkTurnEndsAt = Date().timeIntervalSince1970 + CM_Game_State.networkTurnDuration
+			}
+			startNetworkTurnTimer()
+		}
+		
 		if diceViews.count != state.dice.count {
 			setupDice()
 			hasRolledThisTurn = state.hasRolledThisTurn
@@ -2935,6 +3092,9 @@ public class CM_Game_ViewController : CM_ViewController {
 					if let message = state.eventMessage, !message.isEmpty {
 						self.showCombinationTutorial(combinations: message.components(separatedBy: "\n"))
 					}
+				case "timeout" where eventFromOther:
+					CM_Audio.shared.playSound(.Error)
+					CM_Feedback.shared.make(.Off)
 				default:
 					break
 				}

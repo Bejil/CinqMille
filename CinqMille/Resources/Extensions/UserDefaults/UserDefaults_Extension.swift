@@ -57,6 +57,10 @@ extension UserDefaults {
 		
 		// Theme
 		case theme = "theme"
+		
+		// Network — reprise après crash / kill de l'app
+		case activeNetworkRoomId = "activeNetworkRoomId"
+		case activeNetworkPlayerName = "activeNetworkPlayerName"
 	}
 	
 	nonisolated public static func set(_ value:Any?, _ key:UserDefaults.Keys) {
