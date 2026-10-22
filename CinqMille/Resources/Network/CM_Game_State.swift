@@ -41,7 +41,7 @@ public struct CM_Game_Player_State: Codable, Equatable {
 public struct CM_Game_State: Codable, Equatable {
 	
 	/// Durée maximale d'un tour en multijoueur en ligne (secondes) — réinitialisée à chaque relance (pas au 1er lancer)
-	public static let networkTurnDuration: TimeInterval = 25
+	public static let networkTurnDuration: TimeInterval = 20
 	
 	public var revision:Int
 	public var currentPlayerIndex:Int
@@ -57,7 +57,7 @@ public struct CM_Game_State: Codable, Equatable {
 	public var playersWhoPlayedLastRound:[Int]
 	public var winnerId:String?
 	public var status:String
-	/// ballot | combination | playerLeft | timeout
+	/// ballot | combination | playerLeft | timeout | equality | lastRound
 	public var eventType:String?
 	public var eventMessage:String?
 	public var eventId:Int
@@ -86,7 +86,8 @@ public struct CM_Game_State: Codable, Equatable {
 			eventType: nil,
 			eventMessage: nil,
 			eventId: 0,
-			turnEndsAt: Date().timeIntervalSince1970 + networkTurnDuration
+			// Délai démarré après le splash « À vous » du premier joueur
+			turnEndsAt: nil
 		)
 	}
 	

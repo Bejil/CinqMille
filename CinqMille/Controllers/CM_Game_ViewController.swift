@@ -951,34 +951,52 @@ public class CM_Game_ViewController : CM_ViewController {
 	@discardableResult
 	private func applyEqualityKnockback(for currentPlayer:CM_Player, newScore:Int, completion: (() -> Void)? = nil) -> Bool {
 		
-		var hasKnockback = false
 		let rules = CM_Rules.shared
+		var knocked:[(player:CM_Player, lostPoints:Int)] = []
 		
 		for player in players where player != currentPlayer {
 			
 			if player.score == newScore && !player.scores.isEmpty {
 				// Le joueur perd son dernier score (retombe à son score précédent)
 				let lastScore = player.scores.removeLast()
-				hasKnockback = true
 				
 				// Si le joueur retombe à zéro, il doit à nouveau réaliser le score d'ouverture
 				if rules.openingRequired && player.score == 0 {
 					player.hasOpened = false
 				}
 				
-				// Afficher une notification de knockback
-				showKnockbackNotification(player: player, lostPoints: lastScore, completion: completion)
+				knocked.append((player, lastScore))
 			}
 		}
 		
-		if hasKnockback {
-			updatePlayersDisplay()
-		} else {
-			// Si pas de knockback, appeler le completion immédiatement
+		guard let first = knocked.first else {
 			completion?()
+			return false
 		}
 		
-		return hasKnockback
+		updatePlayersDisplay()
+		
+		// Synchroniser scores + splash chez les autres joueurs pendant l'affichage local
+		if isNetworkMultiplayer && !isApplyingRemoteState,
+		   let index = players.firstIndex(of: first.player),
+		   index < networkPlayerIds.count {
+			let mustReopen = rules.openingRequired && !first.player.hasOpened
+			networkPendingEventType = "equality"
+			networkPendingEventMessage = "\(networkPlayerIds[index])|\(mustReopen ? 1 : 0)|\(first.lostPoints)"
+			pushNetworkGameStateIfNeeded(force: true)
+		}
+		
+		showKnockbackNotification(player: first.player, lostPoints: first.lostPoints, completion: completion)
+		return true
+	}
+	
+	private func isLocalNetworkPlayer(_ player:CM_Player) -> Bool {
+		
+		guard isNetworkMultiplayer,
+			  let userId = networkUserId,
+			  let index = players.firstIndex(of: player),
+			  index < networkPlayerIds.count else { return false }
+		return networkPlayerIds[index] == userId
 	}
 	
 	private func showKnockbackNotification(player:CM_Player, lostPoints:Int, completion: (() -> Void)? = nil) {
@@ -988,14 +1006,15 @@ public class CM_Game_ViewController : CM_ViewController {
 		CM_Feedback.shared.make(.On)
 		
 		let mustReopen = CM_Rules.shared.openingRequired && !player.hasOpened
+		let isVictimLocal = isLocalNetworkPlayer(player) || (!isNetworkMultiplayer && player == players[currentPlayerIndex])
 		let subtitle: String
 		
 		if mustReopen {
-			subtitle = player == players[currentPlayerIndex]
+			subtitle = isVictimLocal
 				? String(key: "game.equality.tutorial.subtitle.currentPlayer.reopen")
 				: (player.name ?? "") + " " + String(key: "game.equality.tutorial.subtitle.player.reopen")
 		} else {
-			subtitle = player == players[currentPlayerIndex]
+			subtitle = isVictimLocal
 				? String(key: "game.equality.tutorial.subtitle.currentPlayer")
 				: (player.name ?? "") + " " + String(key: "game.equality.tutorial.subtitle.player")
 		}
@@ -1010,6 +1029,32 @@ public class CM_Game_ViewController : CM_ViewController {
 		]
 		viewController.completion = completion
 		viewController.present()
+	}
+	
+	private func presentRemoteEqualitySplash(eventMessage:String?) {
+		
+		guard let eventMessage, !eventMessage.isEmpty else {
+			presentTransientSplash(title: String(key: "game.equality.tutorial.title"), duration: 1.5)
+			return
+		}
+		
+		let parts = eventMessage.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+		let knockedId = parts[safe: 0]
+		let mustReopen = parts[safe: 1] == "1"
+		let lostPoints = Int(parts[safe: 2] ?? "") ?? 0
+		
+		if let knockedId,
+		   let index = networkPlayerIds.firstIndex(of: knockedId),
+		   index < players.count {
+			// Aligner hasOpened si le message indique une réouverture (état déjà appliqué sinon)
+			if mustReopen {
+				players[index].hasOpened = false
+			}
+			showKnockbackNotification(player: players[index], lostPoints: lostPoints)
+			return
+		}
+		
+		presentTransientSplash(title: String(key: "game.equality.tutorial.title"), duration: 1.5)
 	}
 	
 	private func isLocalWinner(_ winner:CM_Player) -> Bool {
@@ -1118,6 +1163,12 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		CM_Audio.shared.playSound(.Success)
 		CM_Feedback.shared.make(.On)
+		
+		if isNetworkMultiplayer && !isApplyingRemoteState {
+			networkPendingEventType = "lastRound"
+			networkPendingEventMessage = nil
+			pushNetworkGameStateIfNeeded(force: true)
+		}
 		
 		let viewController:CM_Tutorial_ViewController = .init()
 		viewController.items = [
@@ -1406,9 +1457,14 @@ public class CM_Game_ViewController : CM_ViewController {
 		// Passer au joueur suivant
 		currentPlayerIndex = (currentPlayerIndex + 1) % players.count
 		
-		// Nouveau délai pour le joueur qui commence (poussé avec l'état)
+		// Le délai démarre après le splash « À vous » du joueur concerné
 		if isNetworkMultiplayer && !isApplyingRemoteState {
-			refreshNetworkTurnDeadline()
+			if isMyNetworkTurn() {
+				stopNetworkTurnTimer()
+			} else {
+				networkTurnEndsAt = nil
+				stopNetworkTurnTimer()
+			}
 		}
 		
 		updatePlayersDisplay()
@@ -1429,6 +1485,9 @@ public class CM_Game_ViewController : CM_ViewController {
 		} else {
 			// C'est le tour du joueur humain - s'assurer que l'IA est arrêtée
 			isAIPlaying = false
+			if isNetworkMultiplayer && shouldSyncNetwork {
+				presentYourTurnSplashAndStartTimer()
+			}
 		}
 		
 		bannerView.refresh()
@@ -2721,12 +2780,38 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		for (index, player) in players.enumerated() {
 			
-			let playerStackView = createPlayerStackView(player: player, isCurrentPlayer: index == currentPlayerIndex)
+			let playerStackView = createPlayerStackView(
+				player: player,
+				isCurrentPlayer: index == currentPlayerIndex,
+				isLocalPlayer: isLocalPlayerAtIndex(index)
+			)
 			playersStackView.addArrangedSubview(playerStackView)
 		}
 	}
 	
-	private func createPlayerStackView(player:CM_Player, isCurrentPlayer:Bool) -> UIStackView {
+	/// Joueur « vous » : solo vs IA et en ligne — pas en multijoueur local (même appareil)
+	private func isLocalPlayerAtIndex(_ index:Int) -> Bool {
+		
+		guard index < players.count else { return false }
+		
+		// Multijoueur local : tous partagent l'écran, aucune distinction
+		if isLocalMultiplayer && !isNetworkMultiplayer {
+			return false
+		}
+		
+		if isNetworkMultiplayer {
+			guard let userId = networkUserId, index < networkPlayerIds.count else { return false }
+			return networkPlayerIds[index] == userId
+		}
+		
+		// Solo : le joueur humain
+		return players[index] === CM_Player.current || index == 0
+	}
+	
+	private func createPlayerStackView(player:CM_Player, isCurrentPlayer:Bool, isLocalPlayer:Bool) -> UIStackView {
+		
+		// Actif : même style pour tout le monde (cadre primaire)
+		// Inactif : même style, mais moi sans opacité réduite
 		
 		let nameLabel:CM_Label = .init(player.name)
 		nameLabel.font = Fonts.Content.Title.H4
@@ -2738,19 +2823,28 @@ public class CM_Game_ViewController : CM_ViewController {
 		
 		let scoreLabel:CM_Label = .init("\(player.score)")
 		scoreLabel.font = Fonts.Content.Title.H4.withSize(Fonts.Content.Title.H4.pointSize - 4)
-		scoreLabel.textColor = Colors.Content.Text
+		scoreLabel.textColor = isCurrentPlayer ? Colors.Primary : Colors.Content.Text
 		scoreLabel.textAlignment = .center
 		
 		let stackView:UIStackView = .init(arrangedSubviews: [nameLabel, scoreLabel])
 		stackView.axis = .vertical
 		stackView.spacing = UI.Margins/2
 		stackView.alignment = .center
-		stackView.backgroundColor = isCurrentPlayer ? Colors.Primary.withAlphaComponent(0.2) : .clear
 		stackView.layer.cornerRadius = UI.CornerRadius
-		stackView.layer.borderWidth = isCurrentPlayer ? 2 : 0
-		stackView.layer.borderColor = Colors.Primary.cgColor
 		stackView.isLayoutMarginsRelativeArrangement = true
 		stackView.layoutMargins = .init(UI.Margins)
+		
+		if isCurrentPlayer {
+			stackView.backgroundColor = Colors.Primary.withAlphaComponent(0.28)
+			stackView.layer.borderWidth = 3
+			stackView.layer.borderColor = Colors.Primary.cgColor
+		} else {
+			stackView.backgroundColor = Colors.Content.Title.withAlphaComponent(0.06)
+			stackView.layer.borderWidth = 0
+			if !isLocalPlayer {
+				stackView.alpha = 0.7
+			}
+		}
 		
 		// Tap pour voir les scores détaillés
 		stackView.isUserInteractionEnabled = true
@@ -2827,6 +2921,29 @@ public class CM_Game_ViewController : CM_ViewController {
 		applyNetworkGameState(state)
 		updateUIForCurrentPlayer()
 		updateRollHint()
+		
+		if isMyNetworkTurn() {
+			DispatchQueue.main.async { [weak self] in
+				self?.presentYourTurnSplashAndStartTimer()
+			}
+		}
+	}
+	
+	/// Splash « À vous » puis démarrage du timer de tour (réseau)
+	private func presentYourTurnSplashAndStartTimer() {
+		
+		guard isNetworkMultiplayer,
+			  isMyNetworkTurn(),
+			  !victoryHandled,
+			  !isApplyingRemoteState else { return }
+		
+		stopNetworkTurnTimer()
+		
+		presentTransientSplash(title: String(key: "game.yourTurn"), duration: 1.5) { [weak self] in
+			guard let self, self.isMyNetworkTurn(), !self.victoryHandled else { return }
+			self.refreshNetworkTurnDeadline()
+			self.pushNetworkGameStateIfNeeded(force: true)
+		}
 	}
 	
 	func makeNetworkGameState(winnerId:String? = nil) -> CM_Game_State {
@@ -3053,15 +3170,22 @@ public class CM_Game_ViewController : CM_ViewController {
 		lastRoundTriggerPlayerIndex = state.lastRoundTriggerPlayerIndex
 		playersWhoPlayedLastRound = Set(state.playersWhoPlayedLastRound)
 		
-		// Synchroniser le décompte de tour
-		if state.winnerId != nil || state.status == "finished" {
+		let isNewEvent = state.eventId > previousEventId
+		let isNewRoll = state.hasRolledThisTurn && (state.currentRollNumber > previousRollNumber || (!previousHasRolled && state.hasRolledThisTurn))
+		let becameMyTurn = previousPlayerIndex != currentPlayerIndex && isMyNetworkTurn()
+		// L'auteur de l'action est le joueur courant avant apply (ou le courant du state si mid-tour)
+		let actingPlayerId = previousCurrentId ?? state.players[safe: state.currentPlayerIndex]?.id
+		let eventFromOther = actingPlayerId != nil && actingPlayerId != networkUserId
+		
+		// Synchroniser le décompte de tour (nil / nouveau tour = après le splash « À vous »)
+		if state.winnerId != nil || state.status == "finished" || becameMyTurn {
 			stopNetworkTurnTimer()
-		} else {
-			networkTurnEndsAt = state.turnEndsAt
-			if networkTurnEndsAt == nil {
-				networkTurnEndsAt = Date().timeIntervalSince1970 + CM_Game_State.networkTurnDuration
-			}
+		} else if let endsAt = state.turnEndsAt {
+			networkTurnEndsAt = endsAt
 			startNetworkTurnTimer()
+		} else {
+			stopNetworkTurnTimer()
+			updateValidateButton()
 		}
 		
 		if diceViews.count != state.dice.count {
@@ -3072,17 +3196,20 @@ public class CM_Game_ViewController : CM_ViewController {
 			accumulatedScore = state.accumulatedScore
 		}
 		
-		let isNewEvent = state.eventId > previousEventId
-		let isNewRoll = state.hasRolledThisTurn && (state.currentRollNumber > previousRollNumber || (!previousHasRolled && state.hasRolledThisTurn))
-		// L'auteur de l'action est le joueur courant avant apply (ou le courant du state si mid-tour)
-		let actingPlayerId = previousCurrentId ?? state.players[safe: state.currentPlayerIndex]?.id
-		let eventFromOther = actingPlayerId != nil && actingPlayerId != networkUserId
-		
 		updatePlayersDisplay()
 		updateUIForCurrentPlayer()
 		
+		let presentYourTurnIfNeeded = { [weak self] in
+			guard let self, becameMyTurn, state.winnerId == nil else { return }
+			DispatchQueue.main.async {
+				self.presentYourTurnSplashAndStartTimer()
+			}
+		}
+		
 		let presentRemoteFeedback = { [weak self] in
 			guard let self else { return }
+			
+			var chainedYourTurn = false
 			
 			if isNewEvent {
 				switch state.eventType {
@@ -3092,12 +3219,26 @@ public class CM_Game_ViewController : CM_ViewController {
 					if let message = state.eventMessage, !message.isEmpty {
 						self.showCombinationTutorial(combinations: message.components(separatedBy: "\n"))
 					}
+				case "equality" where eventFromOther:
+					self.presentRemoteEqualitySplash(eventMessage: state.eventMessage)
+				case "lastRound" where eventFromOther:
+					// Enchaîner « À vous » si le tour bascule dans le même apply
+					self.showLastRoundTutorial {
+						presentYourTurnIfNeeded()
+					}
+					chainedYourTurn = true
 				case "timeout" where eventFromOther:
-					CM_Audio.shared.playSound(.Error)
-					CM_Feedback.shared.make(.Off)
+					self.presentTransientSplash(title: String(key: "network.game.timeout"), duration: 1.0) {
+						presentYourTurnIfNeeded()
+					}
+					chainedYourTurn = true
 				default:
 					break
 				}
+			}
+			
+			if !chainedYourTurn {
+				presentYourTurnIfNeeded()
 			}
 			
 			if let winnerId = state.winnerId,

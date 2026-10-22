@@ -230,16 +230,18 @@ public class CM_Network_Lobby_ViewController: CM_ViewController {
 			$0.removeFromSuperview()
 		}
 		
+		let userId = CM_Multiplayer_Service.shared.currentUserId
+		
 		for player in room.players {
 			
+			let isLocal = player.id == userId
 			let row = CM_Label("\(player.name)\(player.isHost ? " ★" : "")")
-			row.font = Fonts.Content.Text.Regular
-			row.textColor = Colors.Content.Title
+			row.font = isLocal ? Fonts.Content.Text.Bold : Fonts.Content.Text.Regular
+			row.textColor = isLocal ? Colors.Secondary : Colors.Content.Title
 			row.textAlignment = .center
 			playersStackView.addArrangedSubview(row)
 		}
 		
-		let userId = CM_Multiplayer_Service.shared.currentUserId
 		startButton.isEnabled = room.canStart && room.hostId == userId
 		
 		if room.status == .playing {

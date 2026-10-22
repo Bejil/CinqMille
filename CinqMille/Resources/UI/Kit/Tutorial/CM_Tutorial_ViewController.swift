@@ -129,7 +129,13 @@ public class CM_Tutorial_ViewController: CM_ViewController {
 			
 			if let self {
 				
-				UI.MainController.present(self, animated: false) { [weak self] in
+				// Présenter au-dessus de l'écran visible (partie, lobby…), pas seulement le root
+				var host:UIViewController = UI.MainController
+				while let presented = host.presentedViewController {
+					host = presented
+				}
+				
+				host.present(self, animated: false) { [weak self] in
 					
 					UIView.animate(withDuration: 0.3) {
 						

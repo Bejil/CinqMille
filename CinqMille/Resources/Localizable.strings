@@ -211,6 +211,7 @@
 "game.reroll.hint" = "Touchez pour relancer les autres dés ou secouez votre téléphone";
 "game.reroll.all.hint" = "Bravo !\nTouchez pour relancer tous les dés";
 "game.turn.score" = "Score du tour";
+"game.yourTurn" = "À vous !";
 "game.validate" = "Valider";
 "game.skip" = "Passer";
 "game.ballot" = "Raté...";

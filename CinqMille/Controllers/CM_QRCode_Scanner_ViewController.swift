@@ -18,43 +18,39 @@ public class CM_QRCode_Scanner_ViewController: CM_ViewController {
 	private var hasScanned:Bool = false
 	private var previousNavAppearance:(standard:UINavigationBarAppearance, scroll:UINavigationBarAppearance?, compact:UINavigationBarAppearance?, tint:UIColor?)?
 	
-	private lazy var topFadeView:UIView = {
+	private let scanHoleSize:CGFloat = 240
+	private let overlayMaskLayer = CAShapeLayer()
+	
+	private lazy var overlayView:UIView = {
 		
 		$0.isUserInteractionEnabled = false
-		$0.backgroundColor = .clear
+		$0.backgroundColor = UIColor.black.withAlphaComponent(0.65)
 		return $0
 		
 	}(UIView())
 	
-	private lazy var bottomFadeView:UIView = {
+	private lazy var scanFrameView:UIView = {
 		
 		$0.isUserInteractionEnabled = false
 		$0.backgroundColor = .clear
+		$0.layer.borderColor = UIColor.white.withAlphaComponent(0.85).cgColor
+		$0.layer.borderWidth = 2
+		$0.layer.cornerRadius = 12
+		$0.clipsToBounds = true
 		return $0
 		
 	}(UIView())
 	
-	private lazy var topGradientLayer:CAGradientLayer = {
+	private lazy var laserView:UIView = {
 		
-		$0.colors = [
-			UIColor.black.withAlphaComponent(0.75).cgColor,
-			UIColor.black.withAlphaComponent(0.0).cgColor
-		]
-		$0.locations = [0, 1]
+		$0.backgroundColor = UIColor.systemRed
+		$0.layer.shadowColor = UIColor.systemRed.cgColor
+		$0.layer.shadowOpacity = 0.9
+		$0.layer.shadowRadius = 6
+		$0.layer.shadowOffset = .zero
 		return $0
 		
-	}(CAGradientLayer())
-	
-	private lazy var bottomGradientLayer:CAGradientLayer = {
-		
-		$0.colors = [
-			UIColor.black.withAlphaComponent(0.0).cgColor,
-			UIColor.black.withAlphaComponent(0.75).cgColor
-		]
-		$0.locations = [0, 1]
-		return $0
-		
-	}(CAGradientLayer())
+	}(UIView())
 	
 	private lazy var hintLabel:CM_Label = {
 		
@@ -74,26 +70,29 @@ public class CM_QRCode_Scanner_ViewController: CM_ViewController {
 		view.backgroundColor = .black
 		navigationItem.largeTitleDisplayMode = .never
 		
-		view.addSubview(topFadeView)
-		view.addSubview(bottomFadeView)
+		view.addSubview(overlayView)
+		view.addSubview(scanFrameView)
+		scanFrameView.addSubview(laserView)
 		view.addSubview(hintLabel)
 		
-		topFadeView.layer.addSublayer(topGradientLayer)
-		bottomFadeView.layer.addSublayer(bottomGradientLayer)
-		
-		topFadeView.snp.makeConstraints { make in
-			make.top.left.right.equalToSuperview()
-			make.height.equalToSuperview().multipliedBy(0.22)
+		overlayView.snp.makeConstraints { make in
+			make.edges.equalToSuperview()
 		}
 		
-		bottomFadeView.snp.makeConstraints { make in
-			make.bottom.left.right.equalToSuperview()
-			make.height.equalToSuperview().multipliedBy(0.28)
+		scanFrameView.snp.makeConstraints { make in
+			make.center.equalToSuperview()
+			make.width.height.equalTo(scanHoleSize)
+		}
+		
+		laserView.snp.makeConstraints { make in
+			make.left.right.equalToSuperview().inset(4)
+			make.top.equalToSuperview()
+			make.height.equalTo(2)
 		}
 		
 		hintLabel.snp.makeConstraints { make in
 			make.left.right.equalToSuperview().inset(UI.Margins)
-			make.bottom.equalTo(view.safeAreaLayoutGuide).inset(UI.Margins)
+			make.top.equalTo(scanFrameView.snp.bottom).offset(UI.Margins * 1.5)
 		}
 	}
 	
@@ -111,11 +110,18 @@ public class CM_QRCode_Scanner_ViewController: CM_ViewController {
 		applyLightNavigationChrome()
 	}
 	
+	public override func viewDidAppear(_ animated: Bool) {
+		
+		super.viewDidAppear(animated)
+		startLaserAnimation()
+	}
+	
 	public override func viewWillDisappear(_ animated: Bool) {
 		
 		super.viewWillDisappear(animated)
 		
 		restoreNavigationChrome()
+		stopLaserAnimation()
 		
 		if session.isRunning {
 			session.stopRunning()
@@ -126,8 +132,57 @@ public class CM_QRCode_Scanner_ViewController: CM_ViewController {
 		
 		super.viewDidLayoutSubviews()
 		previewLayer?.frame = view.bounds
-		topGradientLayer.frame = topFadeView.bounds
-		bottomGradientLayer.frame = bottomFadeView.bounds
+		updateOverlayMask()
+	}
+	
+	private func updateOverlayMask() {
+		
+		let holeRect = scanFrameView.convert(scanFrameView.bounds, to: overlayView)
+		let path = UIBezierPath(rect: overlayView.bounds)
+		let holePath = UIBezierPath(roundedRect: holeRect, cornerRadius: 12)
+		path.append(holePath)
+		path.usesEvenOddFillRule = true
+		
+		overlayMaskLayer.path = path.cgPath
+		overlayMaskLayer.fillRule = .evenOdd
+		overlayView.layer.mask = overlayMaskLayer
+	}
+	
+	/// Accepte le QR s'il intersecte le cadre de scan (filtre UI, sans restreindre AVFoundation).
+	private func isQRInsideScanFrame(_ object:AVMetadataMachineReadableCodeObject) -> Bool {
+		
+		guard let previewLayer,
+			  let transformed = previewLayer.transformedMetadataObject(for: object) else {
+			return true
+		}
+		
+		let holeRect = scanFrameView.convert(scanFrameView.bounds, to: view).insetBy(dx: -12, dy: -12)
+		return holeRect.intersects(transformed.bounds)
+	}
+	
+	private func startLaserAnimation() {
+		
+		stopLaserAnimation()
+		
+		scanFrameView.layoutIfNeeded()
+		let travel = max(0, scanFrameView.bounds.height - 2)
+		
+		laserView.transform = .identity
+		laserView.layer.removeAllAnimations()
+		
+		UIView.animate(
+			withDuration: 1.6,
+			delay: 0,
+			options: [.repeat, .curveEaseInOut, .allowUserInteraction]
+		) { [weak self] in
+			self?.laserView.transform = CGAffineTransform(translationX: 0, y: travel)
+		}
+	}
+	
+	private func stopLaserAnimation() {
+		
+		laserView.layer.removeAllAnimations()
+		laserView.transform = .identity
 	}
 	
 	private func applyLightNavigationChrome() {
@@ -222,7 +277,11 @@ public class CM_QRCode_Scanner_ViewController: CM_ViewController {
 		
 		session.addOutput(output)
 		output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-		output.metadataObjectTypes = [.qr]
+		if output.availableMetadataObjectTypes.contains(.qr) {
+			output.metadataObjectTypes = [.qr]
+		}
+		// Détection sur tout le flux ; le cadre est filtré ensuite dans le delegate
+		output.rectOfInterest = CGRect(x: 0, y: 0, width: 1, height: 1)
 		session.commitConfiguration()
 		
 		let preview = AVCaptureVideoPreviewLayer(session: session)
@@ -231,8 +290,8 @@ public class CM_QRCode_Scanner_ViewController: CM_ViewController {
 		view.layer.insertSublayer(preview, at: 0)
 		previewLayer = preview
 		
-		view.bringSubviewToFront(topFadeView)
-		view.bringSubviewToFront(bottomFadeView)
+		view.bringSubviewToFront(overlayView)
+		view.bringSubviewToFront(scanFrameView)
 		view.bringSubviewToFront(hintLabel)
 		
 		DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -247,28 +306,35 @@ extension CM_QRCode_Scanner_ViewController: AVCaptureMetadataOutputObjectsDelega
 							   didOutput metadataObjects:[AVMetadataObject],
 							   from connection:AVCaptureConnection) {
 		
-		guard !hasScanned,
-			  let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-			  object.type == .qr,
-			  let value = object.stringValue,
-			  let code = CM_QRCode.code(fromScanned: value) else { return }
+		guard !hasScanned else { return }
 		
-		hasScanned = true
-		session.stopRunning()
-		CM_Audio.shared.playSound(.Success)
-		CM_Feedback.shared.make(.On)
-		
-		let scannedCode = code
-		
-		if let navigationController, navigationController.viewControllers.count > 1 {
-			navigationController.popViewController(animated: true)
-			DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-				self?.onCodeScanned?(scannedCode)
+		for metadata in metadataObjects {
+			
+			guard let object = metadata as? AVMetadataMachineReadableCodeObject,
+				  object.type == .qr,
+				  let value = object.stringValue,
+				  let code = CM_QRCode.code(fromScanned: value),
+				  isQRInsideScanFrame(object) else { continue }
+			
+			hasScanned = true
+			session.stopRunning()
+			stopLaserAnimation()
+			CM_Audio.shared.playSound(.Success)
+			CM_Feedback.shared.make(.On)
+			
+			let scannedCode = code
+			
+			if let navigationController, navigationController.viewControllers.count > 1 {
+				navigationController.popViewController(animated: true)
+				DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+					self?.onCodeScanned?(scannedCode)
+				}
+			} else {
+				dismiss { [weak self] in
+					self?.onCodeScanned?(scannedCode)
+				}
 			}
-		} else {
-			dismiss { [weak self] in
-				self?.onCodeScanned?(scannedCode)
-			}
+			return
 		}
 	}
 }
