@@ -1655,114 +1655,67 @@ public class CM_Game_ViewController : CM_ViewController {
 		}
 	}
 	
-	/// Filtre les dés que l'IA peut sélectionner sans dépasser le score cible
+	/// Choisit le meilleur sous-ensemble de dés scorants sans dépasser le score cible.
+	/// Priorité : score exact > se rapprocher au maximum > plus de dés (bravo possible).
 	private func aiFilterDiceForExactScore(scoringDice:[CM_Dice], player:CM_Player) -> [CM_Dice] {
 		
 		let rules = CM_Rules.shared
 		let targetScore = rules.targetScore
-		let currentPlayerScore = player.score
-		let pointsRemaining = targetScore - currentPlayerScore
+		let pointsRemaining = targetScore - player.score
 		
-		// Si on est loin du score cible, on peut tout sélectionner
+		// Loin de l'objectif : tout prendre
 		if pointsRemaining > 2000 {
 			return scoringDice
 		}
 		
-		// Calculer le score actuel du tour (dés déjà verrouillés + accumulé)
-		let currentTurnScore = accumulatedScore + calculateLockedDiceScore()
-		let maxAllowedTurnScore = pointsRemaining
+		let baselineScore = calculateHypotheticalScore(selectingAdditionalDice: [])
 		
-		// Si le score actuel du tour dépasse déjà, on ne peut rien sélectionner
-		if currentTurnScore > maxAllowedTurnScore {
+		// Déjà au-dessus avec les dés verrouillés : ne rien ajouter
+		if player.score + baselineScore > targetScore {
 			return []
 		}
 		
-		// Trier les dés par valeur de points (du plus petit au plus grand)
-		// pour prioriser les sélections qui ne font pas dépasser
-		let sortedDice = scoringDice.sorted { dice1, dice2 in
-			let score1 = singleDiceScore(dice1.value)
-			let score2 = singleDiceScore(dice2.value)
-			return score1 < score2
-		}
+		let count = scoringDice.count
+		guard count > 0 else { return [] }
 		
-		var selectedDice: [CM_Dice] = []
-		var simulatedScore = currentTurnScore
+		var bestSubset:[CM_Dice] = []
+		var bestTurnScore = baselineScore
+		var bestIsExact = false
 		
-		// Essayer d'ajouter les dés un par un
-		for dice in sortedDice {
-			// Simuler l'ajout de ce dé
-			let hypotheticalScore = calculateHypotheticalScoreForAI(adding: dice, toSelected: selectedDice)
+		// Explorer tous les sous-ensembles non vides (≤ 6 dés scorants en pratique)
+		for mask in 1..<(1 << count) {
 			
-			if currentPlayerScore + hypotheticalScore <= targetScore {
-				selectedDice.append(dice)
-				simulatedScore = hypotheticalScore
+			var subset:[CM_Dice] = []
+			subset.reserveCapacity(count)
+			for index in 0..<count where mask & (1 << index) != 0 {
+				subset.append(scoringDice[index])
 			}
-			// Si on atteint exactement le score cible, on arrête
-			if currentPlayerScore + simulatedScore == targetScore {
-				break
+			
+			let turnScore = calculateHypotheticalScore(selectingAdditionalDice: subset)
+			let total = player.score + turnScore
+			
+			// Doit progresser et ne pas dépasser
+			guard turnScore > baselineScore, total <= targetScore else { continue }
+			
+			let isExact = total == targetScore
+			
+			if isExact && !bestIsExact {
+				bestSubset = subset
+				bestTurnScore = turnScore
+				bestIsExact = true
+				continue
 			}
-		}
-		
-		return selectedDice
-	}
-	
-	/// Calcule le score hypothétique si l'IA sélectionne un dé supplémentaire
-	private func calculateHypotheticalScoreForAI(adding newDice:CM_Dice, toSelected selected:[CM_Dice]) -> Int {
-		
-		var diceByRoll:[Int:[Int]] = [:]
-		
-		// Ajouter les dés déjà verrouillés
-		for dice in diceViews where dice.isLocked {
-			if let rollNumber = dice.lockedAtRoll {
-				diceByRoll[rollNumber, default: []].append(dice.value)
-			}
-		}
-		
-		// Ajouter les dés déjà "sélectionnés" dans la simulation
-		for dice in selected {
-			diceByRoll[currentRollNumber, default: []].append(dice.value)
-		}
-		
-		// Ajouter le nouveau dé
-		diceByRoll[currentRollNumber, default: []].append(newDice.value)
-		
-		// Calculer le score
-		var totalScore = 0
-		for (_, values) in diceByRoll {
-			let result = calculateCombinationScore(for: values)
-			totalScore += result.score
-		}
-		
-		return accumulatedScore + totalScore
-	}
-	
-	/// Score d'un dé individuel (pour le tri)
-	private func singleDiceScore(_ value:Int) -> Int {
-		switch value {
-		case 1: return 100
-		case 5: return 50
-		default: return 0
-		}
-	}
-	
-	/// Calcule le score des dés actuellement verrouillés
-	private func calculateLockedDiceScore() -> Int {
-		
-		var diceByRoll:[Int:[Int]] = [:]
-		
-		for dice in diceViews where dice.isLocked {
-			if let rollNumber = dice.lockedAtRoll {
-				diceByRoll[rollNumber, default: []].append(dice.value)
+			
+			guard isExact == bestIsExact else { continue }
+			
+			if turnScore > bestTurnScore ||
+				(turnScore == bestTurnScore && subset.count > bestSubset.count) {
+				bestSubset = subset
+				bestTurnScore = turnScore
 			}
 		}
 		
-		var totalScore = 0
-		for (_, values) in diceByRoll {
-			let result = calculateCombinationScore(for: values)
-			totalScore += result.score
-		}
-		
-		return totalScore
+		return bestSubset
 	}
 	
 	private func aiShouldValidate(currentPlayer:CM_Player, rules:CM_Rules) -> Bool {

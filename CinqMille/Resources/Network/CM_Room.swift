@@ -52,7 +52,11 @@ public struct CM_Room: Codable, Equatable {
 	}
 	
 	public var canStart:Bool {
-		status == .waiting && players.count >= 2
+		status == .waiting && players.count >= 2 && players.allSatisfy(\.isReady)
+	}
+	
+	public var allPlayersReady:Bool {
+		!players.isEmpty && players.allSatisfy(\.isReady)
 	}
 	
 	public init(id:String,

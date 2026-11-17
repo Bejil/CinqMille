@@ -151,7 +151,7 @@ public final class CM_Multiplayer_Service {
 				id: userId,
 				name: playerName,
 				isHost: false,
-				isReady: true,
+				isReady: false,
 				joinedAt: .init()
 			)
 		)
@@ -160,6 +160,24 @@ public final class CM_Multiplayer_Service {
 		try await document.reference.setData(room.firestoreData(), merge: true)
 		rememberActiveRoom(roomId: room.id, playerName: playerName)
 		return room
+	}
+	
+	public func setPlayerReady(roomId:String, isReady:Bool) async throws {
+		
+		guard let userId = currentUserId else {
+			throw CM_Multiplayer_Error.notAuthenticated
+		}
+		
+		var room = try await fetchRoom(roomId: roomId)
+		
+		guard let index = room.players.firstIndex(where: { $0.id == userId }) else {
+			throw CM_Multiplayer_Error.roomNotFound
+		}
+		
+		room.players[index].isReady = isReady
+		room.updatedAt = .init()
+		
+		try await db.collection(roomsCollection).document(roomId).setData(room.firestoreData(), merge: true)
 	}
 	
 	public func leaveRoom(roomId:String) async throws {

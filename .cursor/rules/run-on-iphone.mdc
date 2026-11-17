@@ -1,0 +1,47 @@
+---
+description: Après chaque modification de code, build et lance l'app sur le simulateur iPhone
+alwaysApply: true
+---
+
+# Lancer l'app sur simulateur iPhone après modification
+
+Après **chaque modification substantielle** de code (Swift, ressources, storyboard, etc.), build et lance l'app sur un **simulateur iPhone** sans attendre que l'utilisateur le demande.
+
+## Quand
+
+- Après avoir terminé le lot de changements demandé (pas à chaque micro-edit intermédiaire)
+- Ne pas relancer pour un simple changement de commentaire / markdown / règle Cursor
+
+## Comment
+
+1. Utiliser un **simulateur iPhone** (déjà `Booted` / `connected` si possible, sinon en boot un)
+2. Scheme `CinqMille`, bundle id `com.michaelblin.cinqmille`, projet `CinqMille.xcodeproj`
+3. Exécuter hors sandbox (`required_permissions: ["all"]`)
+4. Ne **pas** cibler un appareil physique
+
+### Commandes
+
+```bash
+# Choisir un simulateur iPhone (préférer un déjà Booted / connected)
+xcrun simctl list devices available | grep -i iphone
+
+UDID=<udid-simulateur>
+DERIVED="$(pwd)/.derivedData"
+
+xcrun simctl boot "$UDID" 2>/dev/null || true
+open -a Simulator
+
+xcodebuild -project CinqMille.xcodeproj -scheme CinqMille -configuration Debug \
+  -destination "platform=iOS Simulator,id=$UDID" \
+  -derivedDataPath "$DERIVED" \
+  build
+
+APP="$DERIVED/Build/Products/Debug-iphonesimulator/CinqMille.app"
+xcrun simctl install "$UDID" "$APP"
+xcrun simctl launch "$UDID" com.michaelblin.cinqmille
+```
+
+## En cas d'échec
+
+- Signaler brièvement l'erreur de build/install
+- Ne pas bloquer la réponse si aucun simulateur n'est disponible

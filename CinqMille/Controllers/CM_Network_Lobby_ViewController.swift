@@ -19,6 +19,8 @@ public class CM_Network_Lobby_ViewController: CM_ViewController {
 	private var room:CM_Room?
 	private var didPresentGame:Bool = false
 	private var isLeaving:Bool = false
+	private var isPresentingReadyRules:Bool = false
+	private weak var readyRulesController:CM_Network_Ready_Rules_ViewController?
 	
 	private lazy var stackView:UIStackView = {
 		
@@ -218,6 +220,7 @@ public class CM_Network_Lobby_ViewController: CM_ViewController {
 		stackView.addArrangedSubview(rulesButton)
 		stackView.addArrangedSubview(leaveButton)
 		updateLobbyContent(room)
+		presentReadyRulesIfNeeded(for: room)
 	}
 	
 	private func updateLobbyContent(_ room:CM_Room) {
@@ -235,9 +238,19 @@ public class CM_Network_Lobby_ViewController: CM_ViewController {
 		for player in room.players {
 			
 			let isLocal = player.id == userId
-			let row = CM_Label("\(player.name)\(player.isHost ? " ★" : "")")
+			let readyText = player.isReady
+				? String(key: "network.lobby.player.ready")
+				: String(key: "network.lobby.player.notReady")
+			let hostMark = player.isHost ? " ★" : ""
+			let row = CM_Label("\(player.name)\(hostMark) — \(readyText)")
 			row.font = isLocal ? Fonts.Content.Text.Bold : Fonts.Content.Text.Regular
-			row.textColor = isLocal ? Colors.Secondary : Colors.Content.Title
+			if isLocal {
+				row.textColor = Colors.Secondary
+			} else if player.isReady {
+				row.textColor = Colors.Content.Title
+			} else {
+				row.textColor = Colors.Content.Text
+			}
 			row.textAlignment = .center
 			playersStackView.addArrangedSubview(row)
 		}
@@ -248,6 +261,79 @@ public class CM_Network_Lobby_ViewController: CM_ViewController {
 			statusLabel.text = String(key: "network.lobby.started")
 			startButton.isEnabled = false
 			presentNetworkGame(with: room)
+			return
+		}
+		
+		presentReadyRulesIfNeeded(for: room)
+	}
+	
+	private func presentReadyRulesIfNeeded(for room:CM_Room) {
+		
+		// L'écran a pu être fermé manuellement sans passer par dismissReadyRulesIfNeeded
+		if isPresentingReadyRules && presentedViewController == nil {
+			isPresentingReadyRules = false
+			readyRulesController = nil
+		}
+		
+		guard room.status == .waiting,
+			  let userId = CM_Multiplayer_Service.shared.currentUserId,
+			  let me = room.player(withId: userId) else { return }
+		
+		// L'hôte est prêt par défaut et n'a pas cet écran
+		if me.isHost || me.isReady {
+			if isPresentingReadyRules {
+				dismissReadyRulesIfNeeded()
+			}
+			return
+		}
+		
+		guard presentedViewController == nil else { return }
+		
+		isPresentingReadyRules = true
+		
+		let snapshot = room.rules ?? CM_Rules_Snapshot.fromCurrentRules()
+		let controller = CM_Network_Ready_Rules_ViewController(snapshot: snapshot) { [weak self] in
+			self?.confirmReady()
+		}
+		readyRulesController = controller
+		present(CM_NavigationController(rootViewController: controller), animated: true)
+	}
+	
+	private func confirmReady() {
+		
+		guard let roomId = room?.id else {
+			readyRulesController?.stopReadyLoading()
+			return
+		}
+		
+		Task { [weak self] in
+			
+			do {
+				try await CM_Multiplayer_Service.shared.setPlayerReady(roomId: roomId, isReady: true)
+				await MainActor.run {
+					self?.dismissReadyRulesIfNeeded()
+				}
+			} catch {
+				await MainActor.run {
+					self?.readyRulesController?.stopReadyLoading()
+					CM_Alert_ViewController.present(error)
+				}
+			}
+		}
+	}
+	
+	private func dismissReadyRulesIfNeeded() {
+		
+		guard isPresentingReadyRules else { return }
+		
+		if let presented = presentedViewController {
+			presented.dismiss(animated: true) { [weak self] in
+				self?.isPresentingReadyRules = false
+				self?.readyRulesController = nil
+			}
+		} else {
+			isPresentingReadyRules = false
+			readyRulesController = nil
 		}
 	}
 	

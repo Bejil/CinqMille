@@ -30,7 +30,8 @@ Collection `rooms` :
 
 - Auth anonyme
 - Créer une partie / rejoindre avec un code / lister les parties en attente
-- Lobby temps réel (quitter / démarrer côté host dès 2 joueurs)
+- Lobby temps réel (quitter / démarrer côté host dès 2 joueurs **tous prêts**)
+- À l’arrivée : écran de règles simplifié + bouton « Je suis prêt » (`players[].isReady`)
 - Règles de l’hôte figées dans `rooms.rules` et appliquées sur tous les clients
 - État de partie synchronisé (`rooms.game`) : tours, dés, scores, victoire
 - Limite de temps par tour (15 s, champ `game.turnEndsAt`, relancée à chaque relance mais pas au 1er lancer) : décompte sur Valider/Passer ; à 0 le tour est perdu sans points

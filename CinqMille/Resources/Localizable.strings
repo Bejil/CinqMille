@@ -52,6 +52,26 @@
 "network.lobby.scan.invalid" = "QR code invalide. Scannez le code d'une partie Cinq Mille.";
 "network.lobby.start" = "Démarrer la partie";
 "network.lobby.rules" = "Règles de la partie";
+"network.lobby.ready" = "Je suis prêt";
+"network.lobby.ready.title" = "Règles de la partie";
+"network.lobby.ready.subtitle" = "Lis les règles de cette partie, puis confirme que tu es prêt.";
+"network.lobby.player.ready" = "Prêt";
+"network.lobby.player.notReady" = "Pas prêt";
+"network.lobby.ready.row.objective" = "Objectif";
+"network.lobby.ready.row.dice" = "Dés";
+"network.lobby.ready.row.opening" = "Ouverture";
+"network.lobby.ready.row.exact" = "Score exact";
+"network.lobby.ready.row.last1000" = "Derniers 1000";
+"network.lobby.ready.row.equality" = "Égalité";
+"network.lobby.ready.row.special" = "Spécial";
+"network.lobby.ready.row.penalties" = "Pénalités";
+"network.lobby.ready.value.on" = "Oui";
+"network.lobby.ready.value.off" = "Non";
+"network.lobby.ready.special.full" = "Full";
+"network.lobby.ready.special.fiveOnes" = "5×1";
+"network.lobby.ready.special.fiveFives" = "5×5";
+"network.lobby.ready.penalty.threeBallots" = "3 ballots";
+"network.lobby.ready.penalty.multipleOf100" = "×100";
 "rules.button" = "Règles";
 "network.lobby.leave" = "Quitter";
 "network.lobby.started" = "La partie démarre…";
@@ -72,7 +92,7 @@
 "network.error.roomAlreadyStarted" = "La partie a déjà commencé.";
 "network.error.invalidCode" = "Le code doit contenir 6 caractères.";
 "network.error.hostOnly" = "Seul l'hôte peut démarrer la partie.";
-"network.error.notReady" = "Il faut au moins 2 joueurs pour démarrer.";
+"network.error.notReady" = "Il faut au moins 2 joueurs, tous prêts, pour démarrer.";
 "network.error.codeGeneration" = "Impossible de générer un code unique.";
 
 //MARK: - Stats
